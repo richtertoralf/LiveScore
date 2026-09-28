@@ -2,7 +2,7 @@
 
 Lokale Webanwendung zur einfachen Erfassung und Bereitstellung von Live-Spielständen bei Turnieren.
 
-LiveScore ist für Veranstaltungen gedacht, bei denen sich in einem Spiel oder Wettkampf **zwei Parteien direkt gegenüberstehen**. Das können Mannschaften oder Einzelpersonen sein. Beispiele sind Fußball, Blindenfußball, Showdown, Tennis, Tischtennis, Hockey oder andere Sportarten mit zwei Seiten.
+LiveScore ist für Veranstaltungen gedacht, bei denen sich in einem Spiel oder Wettkampf **zwei Parteien direkt gegenüberstehen**. Das können Mannschaften oder Einzelpersonen sein. Beispiele sind Fußball, Blindenfußball, Showdown, Boxen, Tennis, Tischtennis, Hockey oder andere Sportarten mit zwei Seiten.
 
 Die Anwendung ersetzt **keine Turnierverwaltung**. Spielplan, Teilnehmer und Veranstaltungsdaten werden vor der Veranstaltung übernommen oder manuell eingetragen. Während der Produktion konzentriert sich LiveScore auf genau das, was am Spielfeld benötigt wird:
 

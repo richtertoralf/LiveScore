@@ -17,7 +17,7 @@ def save(path: Path, state: State):
     atomic_write(path, validated.model_dump_json(indent=2) + "\n")
 
 
-def atomic_write(path: Path, text: str):
+def atomic_write(path: Path, text: str, *, preserve_owner=False):
     """Der Aufrufer validiert den Inhalt und hält die zugehörige Schreibsperre."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
@@ -25,6 +25,11 @@ def atomic_write(path: Path, text: str):
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
                                          prefix=f".{path.name}.", suffix=".tmp", delete=False) as file:
             temporary = Path(file.name)
+            if preserve_owner and os.name != "nt" and path.exists():
+                owner = path.stat()
+                current = os.fstat(file.fileno())
+                if (owner.st_uid, owner.st_gid) != (current.st_uid, current.st_gid):
+                    os.fchown(file.fileno(), owner.st_uid, owner.st_gid)
             file.write(text)
             file.flush()
             os.fsync(file.fileno())
@@ -35,12 +40,12 @@ def atomic_write(path: Path, text: str):
 
 
 class FileLease:
-    """OS-Sperre bleibt bis zum Shutdown gehalten; Abstürze geben sie frei."""
+    """OS-Sperre bis release(); Prozessende gibt sie ebenfalls frei."""
     def __init__(self, path: Path):
         self.path = path.with_suffix(path.suffix + ".lock")
         self.file = None
 
-    def acquire(self):
+    def acquire(self, *, blocking=False):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         file = self.path.open("a+b")
         try:
@@ -51,10 +56,10 @@ class FileLease:
                     file.write(b"\0")
                     file.flush()
                 file.seek(0)
-                msvcrt.locking(file.fileno(), msvcrt.LK_NBLCK, 1)
+                msvcrt.locking(file.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1)
             else:
                 import fcntl
-                fcntl.flock(file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(file.fileno(), fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
         except OSError as exc:
             file.close()
             raise RuntimeError("Datendatei bereits in Verwendung. Nur einen LiveScore-Prozess starten.") from exc

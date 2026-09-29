@@ -9,6 +9,7 @@ User=livescore
 Group=livescore
 WorkingDirectory=/opt/livescore/current
 ExecStart=/opt/livescore/current/bin/livescore
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=3
 UMask=0077

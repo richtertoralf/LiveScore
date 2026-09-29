@@ -19,6 +19,7 @@ from .service import Conflict, live_view
 from .storage import FileLease
 from .auth import Auth, AuthConfig, COOKIE
 from .auth_web import install_auth, same_origin
+from .auth_reload import auth_reload_handler
 
 
 class EventContext(Model):
@@ -87,12 +88,9 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
                 lease.acquire()
                 cleanup.callback(lease.release)
             app.state.service = Catalog(data_dir, legacy)
-            if auth_config.enabled:
-                lease = FileLease(auth_config.file)
-                lease.acquire()
-                cleanup.callback(lease.release)
             app.state.auth = Auth(auth_config)
-            yield
+            async with auth_reload_handler(app.state.auth):
+                yield
 
     app = FastAPI(title="LiveScore", version=__version__, lifespan=lifespan)
     install_auth(app, ROOT)

@@ -2,10 +2,13 @@
 import argparse
 import asyncio
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass
 import getpass
 import hashlib
 import hmac
+import logging
+import os
 from pathlib import Path
 import secrets
 import time
@@ -15,7 +18,7 @@ import yaml
 from pydantic import Field, SecretStr, field_validator, model_validator
 
 from .models import Model
-from .storage import atomic_write
+from .storage import atomic_write, FileLease
 
 USERS = ('admin', 'operator')
 COOKIE = 'livescore_session'
@@ -86,6 +89,48 @@ class PasswordChange(Model):
     repeat: SecretStr = Field(min_length=12, max_length=1024)
 
 
+@contextmanager
+def credentials_lock(path):
+    """Shared OS lock for auth reads/writes, not the server's lifetime."""
+    lease = FileLease(path)
+    lease.acquire(blocking=True)
+    try:
+        # sudo recovery must not leave a newly created lock owned only by root.
+        if os.name != 'nt' and path.exists() and os.geteuid() == 0:
+            owner = path.stat()
+            os.fchown(lease.file.fileno(), owner.st_uid, owner.st_gid)
+        yield
+    finally:
+        lease.release()
+
+
+def read_credentials(path):
+    """Caller holds credentials_lock. Reload/update deliberately validate strictly."""
+    return Credentials.model_validate(yaml.safe_load(path.read_text(encoding='utf-8')))
+
+
+def save_credentials(path, credentials):
+    """Caller holds credentials_lock; keep service-account ownership after sudo."""
+    checked = Credentials.model_validate(credentials.model_dump())
+    atomic_write(path, yaml.safe_dump(checked.model_dump(), sort_keys=False), preserve_owner=True)
+
+
+def load_credentials(path):
+    with credentials_lock(path):
+        return read_credentials(path)
+
+
+def update_password(path, username, encoded, expected_admin_hash=None):
+    """Read-modify-write on the latest disk state, never a stale RAM snapshot."""
+    with credentials_lock(path):
+        current = read_credentials(path)
+        if expected_admin_hash is not None and current.users['admin'].password_hash != expected_admin_hash:
+            return current, False  # Recovery revoked this web request's authority.
+        current.users[username] = User(role=username, password_hash=encoded, default_password=False)
+        save_credentials(path, current)
+        return current, True
+
+
 @dataclass
 class Session:
     username: str
@@ -102,24 +147,39 @@ class Auth:
         self.attempts = deque()
         self.credentials = None
         if config.enabled:
-            if config.file.exists():
-                raw = yaml.safe_load(config.file.read_text())
-                if not isinstance(raw, dict) or not isinstance(raw.get('users'), dict):
-                    raise ValueError('Auth configuration requires a users mapping.')
-                # Retain the two supported accounts exactly; remove obsolete settings.
-                # Validation precedes the atomic rewrite, under the application's file lease.
-                current = {'users': {name: raw['users'].get(name) for name in USERS}}
-                self.credentials = Credentials.model_validate(current)
-                if raw != self.credentials.model_dump():
-                    self.save(self.credentials)
-            else:
-                self.credentials = Credentials(users={name: User(role=name, password_hash=hash_password(name)) for name in USERS})
-                self.save(self.credentials)
+            with credentials_lock(config.file):
+                if config.file.exists():
+                    raw = yaml.safe_load(config.file.read_text())
+                    if not isinstance(raw, dict) or not isinstance(raw.get('users'), dict):
+                        raise ValueError('Auth configuration requires a users mapping.')
+                    # Startup compatibility only; hot reload never rewrites the file.
+                    current = {'users': {name: raw['users'].get(name) for name in USERS}}
+                    self.credentials = Credentials.model_validate(current)
+                    if raw != self.credentials.model_dump():
+                        save_credentials(config.file, self.credentials)
+                else:
+                    self.credentials = Credentials(users={name: User(role=name, password_hash=hash_password(name)) for name in USERS})
+                    save_credentials(config.file, self.credentials)
             self.dummy_hash = hash_password(secrets.token_urlsafe(32))
 
-    def save(self, credentials):
-        checked = Credentials.model_validate(credentials.model_dump())
-        atomic_write(self.config.file, yaml.safe_dump(checked.model_dump(), sort_keys=False))
+    def adopt(self, candidate):
+        changed = {name for name in USERS if self.credentials.users[name] != candidate.users[name]}
+        self.credentials = candidate
+        self.sessions = {sid: session for sid, session in self.sessions.items() if session.username not in changed}
+
+    async def reload(self):
+        if not self.config.enabled:
+            return False
+        async with self.lock:
+            try:
+                candidate = await asyncio.to_thread(load_credentials, self.config.file)
+            except (OSError, ValueError, RuntimeError, yaml.YAMLError):
+                # Do not log validation details: they may contain password hashes.
+                logging.error('Auth reload rejected; retaining previous credentials and sessions.')
+                return False
+            self.adopt(candidate)
+            logging.getLogger('uvicorn.error').info('LiveScore authentication reloaded without restart.')
+            return True
 
     def session(self, sid):
         session = self.sessions.get(sid)
@@ -170,6 +230,8 @@ class Auth:
         async with self.lock:
             if not any(s is session for s in self.sessions.values()) or session.expires <= time.monotonic():
                 return 'auth_required'
+            if session.username != 'admin':
+                return 'forbidden'
             if self.restricted(session) and command.username != 'admin':
                 return 'password_required'
             password = command.password.get_secret_value()
@@ -178,15 +240,21 @@ class Auth:
             if password in USERS:
                 return 'password_weak'
             encoded = await asyncio.to_thread(hash_password, password)
-            candidate = self.credentials.model_copy(deep=True)
-            candidate.users[command.username] = User(role=command.username, password_hash=encoded, default_password=False)
-            # Same cancellation-safe persistence as tournament changes.
-            from .service import persist
-            cancelled = await persist(self.save, candidate)
-            self.credentials = candidate
-            self.sessions = {sid: s for sid, s in self.sessions.items() if s.username != command.username}
+            if not any(s is session for s in self.sessions.values()) or session.expires <= time.monotonic():
+                return 'auth_required'
+            task = asyncio.create_task(asyncio.to_thread(update_password, self.config.file,
+                command.username, encoded, self.credentials.users['admin'].password_hash))
+            cancelled = False
+            try:
+                candidate, accepted = await asyncio.shield(task)
+            except asyncio.CancelledError:
+                candidate, accepted = await task
+                cancelled = True
+            self.adopt(candidate)
             if cancelled:
                 raise asyncio.CancelledError
+            if not accepted:
+                return 'auth_required'
         return None
 
 

@@ -80,6 +80,26 @@ sudo systemctl restart livescore
 sudo journalctl -u livescore -n 100 --no-pager
 ```
 
+Dieser Restart gilt für Änderungen an Server-Host/Port, nicht für Passwort-Recovery.
+Für ein vergessenes Admin-Passwort während einer Veranstaltung:
+
+```sh
+sudo livescore --reset-admin-password
+# Auth-Datei auch unabhängig von Recovery erneut einlesen:
+sudo systemctl reload livescore
+```
+
+`ExecReload=/bin/kill -HUP $MAINPID` lädt ausschließlich Auth neu, ohne Prozesswechsel.
+Admin-Recovery erhält Operator-Sessions/WebSockets und sämtliche Live-Daten.
+Ungültige Credentials werden abgewiesen, der bisherige RAM-Stand bleibt aktiv.
+Die CLI speichert atomar unter demselben kurzen Lock wie die Web-Passwortverwaltung
+und übernimmt den bisherigen Dateieigentümer. Kein Stop/Start/Restart im Recovery-Pfad.
+Der automatisch angeforderte Reload wird im Dienstlog bestätigt; die CLI wartet
+nicht auf eine fachliche Bestätigung des asynchronen Signalhandlers.
+Ohne passenden laufenden systemd-Dienst meldet sie den erforderlichen manuellen
+Auth-Reload beziehungsweise das Laden beim nächsten normalen Start.
+Details und Verhalten älterer Prozesse: [README – Recovery](../README.md#admin-passwort-vergessen-recovery-ohne-downtime).
+
 Host und Port sind frei konfigurierbar. Der Installer unterstützt Datenpfade
 innerhalb `/var/lib/livescore/data` und Auth-Pfade innerhalb `/etc/livescore`.
 Andere Pfade sind beim manuellen Checkout-Betrieb möglich, werden vom automatischen
@@ -178,6 +198,7 @@ Dienstkonto bleibt auch bei Purge bestehen; keine fremden Konten werden verände
 .test-artifacts/manual-install/usr/local/bin/livescore --upgrade --source "$PWD"
 ./uninstall.sh --staging-root "$PWD/.test-artifacts/manual-install"
 .venv/bin/python tests/deployment_smoke.py
+.venv/bin/python tests/auth_recovery_smoke.py
 ```
 
 Staging bildet alle Installationspfade unter dem angegebenen Root ab. Es erstellt
@@ -194,5 +215,12 @@ Deployment-Lock, Fremdpfadschutz und Seed-Grenzfälle. Browser-Smokes prüfen di
 Version auf allen fünf Seiten und EN/DE/CS sowie die bisherigen Bedienabläufe.
 
 Auf codex-dev werden diese Tests nur unter `.test-artifacts/` ausgeführt.
+Der Recovery-Smoke hält ein echtes Live-Spiel mit Score, Fouls und zweiter Periode
+aktiv, verwendet echte verdeckte PTY-Eingabe und sendet echtes SIGHUP an denselben
+Server-PID. Ein isolierter `systemctl`-Stub führt den mitgelieferten ExecReload-Befehl
+aus; er kontaktiert niemals Host-systemd. Währenddessen werden Live-GETs fortlaufend
+geprüft sowie bestehende Operator-Session und WebSocket beibehalten. Die Auth-Tests
+prüfen zusätzlich parallele Web-/CLI-Transaktionen, veraltete Admin-Requests,
+Dateifehler und ungültigen Reload ohne Verlust der funktionierenden Credentials.
 Ein echter systemweiter Installations-/systemd-Test wurde dort nicht ausgeführt;
 die bestehende Instanz und andere Dienste bleiben unberührt.

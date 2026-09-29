@@ -239,13 +239,62 @@ Digest-Vergleichen benötigt keine zusätzliche Dependency. Diese Parameter sind
 eine der [OWASP-scrypt-Varianten](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt);
 Implementierung über die [Python-Standardbibliothek](https://docs.python.org/3/library/hashlib.html#hashlib.scrypt).
 Andere Parameterformate werden beim Laden abgewiesen. Bei manueller Änderung
-den Server beenden, Hash einsetzen, `default_password: false` setzen und neu starten.
+die unten beschriebene Recovery verwenden; dafür ist kein Serverneustart nötig.
 
 Die Auth-Datei wird unter einem Lock atomar mit Temp-Datei, Flush, fsync und
 Replace gespeichert. Neue Dateien erhalten unter Linux Modus 0600. Eine
-OS-Dateisperre verhindert parallele Writer. Auth-Datei und Backups vertraulich
+OS-Dateisperre in `auth.yml.lock` verhindert parallele Writer. Sie wird nur während
+des tatsächlichen Lesens/Änderns/Schreibens gehalten, nicht für die Serverlaufzeit.
+Web-UI und CLI verwenden dieselbe Sperre und lesen innerhalb der Transaktion
+den neuesten Dateistand. Auth-Datei und Backups vertraulich
 behandeln. Sie ist unabhängig von Event-JSON und Exporten; `schema_version`
 bleibt 1, keine neue State-Migration.
+
+### Admin-Passwort vergessen: Recovery ohne Downtime
+
+```sh
+sudo livescore --reset-admin-password
+```
+
+Das neue Passwort wird zweimal verdeckt mit `getpass` abgefragt (12–1024 Zeichen).
+Kein Passwort als Argument oder Umgebungsvariable übergeben. Die bestehende
+Auth-Datei muss gültig sein; Recovery erzeugt keine Ersatzaccounts. Es werden nur
+`admin.password_hash` und dessen `default_password: false` gesetzt. Der Operator
+bleibt unverändert. Atomarer Replace erhält auch bei `sudo` den Dateieigentümer
+des Dienstkontos und die restriktiven Rechte.
+
+Für den passenden laufenden systemd-Dienst löst die CLI anschließend automatisch
+`systemctl reload livescore` aus. Die Unit sendet **SIGHUP**, ohne Stop/Start/Restart.
+Der Prozess validiert ausschließlich die konfigurierte Auth-Datei und übernimmt
+sie erst bei Erfolg. Alte Admin-Sessions werden ungültig; Operator-Sessions und
+deren WebSockets bleiben bestehen. Veranstaltung, aktives Match, Scores, Fouls,
+Perioden und die öffentliche Live-API bleiben unverändert verfügbar.
+
+Die CLI meldet das **Anfordern** des Reloads; dessen asynchrone Validierung steht
+im Dienstlog (`journalctl -u livescore`). Bei ungültiger oder fehlender neuer Datei
+bleiben bisherige Credentials und Sessions im Speicher erhalten. Der Fehler wird
+ohne Passwörter/Hashes geloggt. Ein SIGHUP mit unveränderten Credentials meldet
+keine Benutzer ab. Ändert eine gültige Datei auch den Operator, werden ausschließlich
+dessen betroffene Sessions zusätzlich entzogen.
+
+Ohne laufenden systemd-Dienst wird das Passwort trotzdem gespeichert. Ein bereits
+laufender Standalone-Prozess benötigt ausdrücklich **SIGHUP an seine geprüfte PID**;
+andernfalls wird die Datei beim nächsten normalen Start geladen. Zum Beispiel:
+
+```sh
+.venv/bin/python -m livescore --config config/local.yml --reset-admin-password
+kill -HUP <geprüfte-LiveScore-PID>
+```
+
+Die CLI prüft vor automatischem Reload den Config-Pfad, die verwaltete Unit, deren
+reinen HUP-Reload-Befehl und ob der Prozess SIGHUP tatsächlich behandelt. Bei einer
+älteren laufenden Version ohne Handler sendet sie **kein Signal** und fordert keinen
+Neustart an; sie meldet den noch ausstehenden Reload mit Exitcode 1. Nach einem
+Reload-Fehler ist das Passwort bereits auf Platte geändert; deshalb den Status
+prüfen, statt blind erneut zurückzusetzen. SIGHUP-Recovery setzt Linux/Unix voraus.
+Die erstmalige Bereitstellung dieser Funktion erfolgt im regulären Wartungsfenster;
+ein schon laufender älterer Prozess bekommt neue Python-Funktionen nicht allein
+durch einen Austausch der Quelldateien.
 
 Sessions verwenden kryptografisch zufällige 256-Bit-Kennungen und liegen nur im
 RAM. Cookies: `HttpOnly`, `SameSite=Lax`, `Secure` gemäß Config; Default-Laufzeit
@@ -877,6 +926,7 @@ Für den automatisierten Browserlauf einmal Chromium installieren:
 .venv/bin/python tests/browser_auth_smoke.py
 # Zusätzlicher isolierter Installer-/Upgrade-/Uninstall-Test mit echter venv/pip:
 .venv/bin/python tests/deployment_smoke.py
+.venv/bin/python tests/auth_recovery_smoke.py
 ```
 
 Alternativ einen vorhandenen Browser lesend verwenden:

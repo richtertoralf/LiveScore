@@ -163,6 +163,9 @@ async def run(executable):
                 await login(a,'operator'); await expect(a.locator('html')).to_have_attribute('lang','de')
                 await expect(a.locator('#score-L')).to_have_text('1')
                 await a.locator('#logout').click(); await expect(a).to_have_url(url+'/login')
+                # Let the login page finish its session fetch before deliberately
+                # stopping the test server; a URL change alone is not page readiness.
+                await a.wait_for_load_state('networkidle')
                 process.terminate();process.wait(timeout=10)
                 process=start()
                 await admin.goto(url+'/users'); await expect(admin).to_have_url(url+'/login')

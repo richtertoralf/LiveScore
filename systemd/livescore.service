@@ -1,16 +1,22 @@
-# Optionaler systemd-Benutzerdienst; Pfad bei anderem Checkout anpassen.
-# Nur Beispiel: wird nicht automatisch installiert oder aktiviert.
+# Managed by the LiveScore installer; operator overrides: systemctl edit livescore.
 [Unit]
-Description=LiveScore – lokale Spielstandserfassung
+Description=LiveScore
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=%h/LiveScore
-ExecStart=%h/LiveScore/.venv/bin/python -m livescore --config %h/LiveScore/config/livescore.yml
+User=livescore
+Group=livescore
+WorkingDirectory=/opt/livescore/current
+ExecStart=/opt/livescore/current/bin/livescore
 Restart=on-failure
 RestartSec=3
 UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/livescore /var/lib/livescore
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

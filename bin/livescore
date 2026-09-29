@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""CLI wrapper: version needs only the standard library; serving uses our venv."""
+import json
+import os
+from pathlib import Path
+import sys
+
+root = Path(__file__).resolve().parent.parent
+if sys.argv[1:] == ['--version']:
+    print('LiveScore ' + (root / 'VERSION').read_text().strip())
+    raise SystemExit(0)
+metadata = root / 'installation.json'
+settings = json.loads(metadata.read_text()) if metadata.exists() else {}
+if sys.argv[1:2] == ['--upgrade']:
+    args = [sys.executable, str(root / 'tools/deploy.py'), 'upgrade']
+    if settings.get('staging_root'):
+        args += ['--staging-root', settings['staging_root']]
+    os.execv(sys.executable, args + sys.argv[2:])
+os.chdir(root)
+python = str(root / '.venv/bin/python')
+args = [python, '-m', 'livescore']
+if settings.get('config'):
+    args += ['--config', settings['config']]
+os.execv(python, args + sys.argv[1:])

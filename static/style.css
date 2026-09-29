@@ -335,3 +335,4 @@ header { flex-wrap: wrap; }
 #logout { min-height: 36px; padding: 5px 10px; font-size: .85rem; }
 .security-warning { color: #ffd19b; border-left: 3px solid #ffb276; padding: 12px; background: #251e17; }
 [hidden] { display: none !important; }
+.app-version { text-align: center; padding: .75rem; font-size: .8rem; color: #9aacc1; }

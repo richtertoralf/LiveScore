@@ -132,6 +132,10 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     async def live():
         return live_view(app.state.service.state)
 
+    @app.get("/api/version")
+    async def version():
+        return {"version": __version__}
+
     @app.get("/api/v1/tournament")
     async def tournament():
         return app.state.service.view()

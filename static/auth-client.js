@@ -1,4 +1,5 @@
 import {t, errorText} from './i18n.js';
+import './version.js';
 export const auth = await fetch('/api/auth/session').then(r => r.json());
 export const csrfHeaders = () => ({'Content-Type':'application/json','X-CSRF-Token':auth.csrf_token || ''});
 export const canOperate = () => auth.role === 'admin' || auth.role === 'operator';

@@ -27,7 +27,7 @@ def install_auth(app, root):
         auth = app.state.auth
         path = request.url.path.rstrip('/') or '/'
         public = (path in ('/login', '/api/auth/session')
-                  or (request.method == 'GET' and path == '/api/v1/live')
+                  or (request.method == 'GET' and path in ('/api/v1/live', '/api/version'))
                   or (path.startswith('/static/') and not path.endswith('.html')))
         session = auth.session(request.cookies.get(COOKIE)) if auth.config.enabled else None
         request.state.session = session

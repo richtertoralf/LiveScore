@@ -21,6 +21,48 @@ startet keinen Server und verändert keine Konfiguration oder Veranstaltungsdate
 
 ## Installation und Start
 
+### Linux-Dienst installieren
+
+Auf Linux mit systemd, Python **3.12+**, `venv`, `pip` und Git:
+
+```sh
+git clone https://github.com/richtertoralf/LiveScore.git
+cd LiveScore
+sudo ./install.sh
+livescore --version
+systemctl status livescore
+```
+
+Der Installer erstellt `/opt/livescore` (Code und venv), `/etc/livescore`
+(Server-Config und Auth) sowie `/var/lib/livescore/data` (Veranstaltungen).
+`/usr/local/bin/livescore` stellt die CLI bereit. Der Dienst `livescore.service`
+läuft als eigener Benutzer `livescore` und startet automatisch beim Booten.
+Bei einer frischen Installation ist **Prag 2026 bereits aktiv ausgewählt**:
+6 Teilnehmer, 6 Referees, 14 vorbereitete Spielplan-Einträge mit Officials und
+Teamfoul-Profil. Nach Operator-Login kann sofort das erste Spiel vorbereitet werden.
+
+Web: **http://HOST:8730/** · öffentliche API: **http://HOST:8730/api/v1/live**.
+Initial: **admin / admin**, **operator / operator**.
+**Vor Internetfreigabe beide Passwörter ändern und HTTPS verwenden.**
+
+```sh
+sudo livescore --upgrade
+sudo /opt/livescore/current/uninstall.sh
+# Nur bei ausdrücklich gewünschter Löschung aller Daten und Passwörter:
+sudo ./uninstall.sh --purge
+```
+
+Upgrade lädt GitHub/main, baut zuerst eine neue venv, prüft die vorhandene Config,
+sichert Config/Auth/Eventdaten und startet den Dienst mit der neuen Laufzeit.
+Die Dateien und die aktive Veranstaltung bleiben erhalten. Fehler beim Start
+führen zur Rückkehr zur bisherigen Laufzeit. Uninstall behält standardmäßig
+Config, Passwörter, Veranstaltungsdaten und Backups. Ein erneuter `install.sh`-Lauf
+bei vorhandener Laufzeit verweist kontrolliert auf `--upgrade`.
+Details, Voraussetzungen, Fehlerbehandlung und isolierte Tests:
+[docs/INSTALLATION.md](docs/INSTALLATION.md).
+
+### Manuell aus dem Checkout starten
+
 Voraussetzung: Python **3.12 oder neuer** mit `venv` und `pip`.
 Unter Linux im Repository:
 
@@ -52,7 +94,9 @@ HTTPS und geänderte Startpasswörter erforderlich.
 
 ### Konfiguration
 
-`config/livescore.yml` ist die zentrale Serverkonfiguration:
+`config/livescore.yml` ist die zentrale Serverkonfiguration im Checkout.
+Die Linux-Installation verwendet `/etc/livescore/livescore.yml` mit
+`data_dir: /var/lib/livescore/data`. Relative Pfade bleiben möglich:
 
 ```yaml
 bind_host: 0.0.0.0
@@ -84,7 +128,8 @@ Eigene Konfiguration, zum Beispiel `config/local.yml`:
 
 Ungültige Config oder beschädigte vorhandene Veranstaltungs-/Auswahldateien
 brechen den Start ab. Bestehende Daten werden niemals durch leere Standarddaten
-ersetzt. Ohne vorhandene Daten startet ein leerer Katalog ohne aktive Veranstaltung.
+ersetzt. Beim manuellen Start ohne vorhandene Daten entsteht ein leerer Katalog.
+Nur der Installer initialisiert bei fehlenden Veranstaltungsdaten den Prag-Seed.
 `data/` ist von Git ausgeschlossen.
 
 **Genau ein Serverprozess pro Datenverzeichnis.** Ein Uvicorn-Worker und eine
@@ -94,9 +139,8 @@ Single-Event-Prozess darauf arbeitet. Lock-Dateien dürfen liegen bleiben; ihre 
 werden auch bei Prozessabbruch freigegeben. Keine weiteren Worker oder parallelen
 Writer starten. JSON-Dateien nur bei beendetem Server manuell bearbeiten.
 
-Ein optionales Beispiel für einen systemd-Benutzerdienst liegt in
-`systemd/livescore.service`. Es wird durch dieses Projekt weder installiert noch
-aktiviert. Im lokalen Netz ist kein Reverse Proxy erforderlich; Internetzugriff
+`systemd/livescore.service` ist die vom Linux-Installer verwendete System-Unit.
+Beim manuellen Start wird kein Dienst installiert. Im lokalen Netz ist kein Reverse Proxy erforderlich; Internetzugriff
 benötigt HTTPS wie unten beschrieben.
 
 ## Sprache und lokale Benutzer
@@ -111,6 +155,11 @@ Sprache im Event-State. Namen und frei eingegebene Texte bleiben erhalten;
 bekannte Standardbegriffe wie „Halbzeit“, „Tore“ und die Prag-Warntexte werden
 bei der Anzeige übersetzt. Technische API-Feldnamen bleiben unverändert.
 
+Auf `/`, `/events`, `/config`, `/users` und `/login` zeigt ein unauffälliger Footer
+**LiveScore v0.1.0**. Die öffentliche `GET /api/version` liefert dafür
+`{"version":"0.1.0"}` aus derselben `VERSION`-Datei wie Python und CLI.
+Die Anzeige bleibt in allen drei Sprachen gleich.
+
 Bei aktiviertem Schutz führt `/` zunächst zu **/login**. Initial credentials:
 
 | Benutzer | Startpasswort | Rolle |
@@ -121,7 +170,8 @@ Bei aktiviertem Schutz führt `/` zunächst zu **/login**. Initial credentials:
 **Diese Passwörter vor Internetfreigabe ändern. HTTPS ist zwingend erforderlich.**
 
 Genau diese zwei Namen und Rollen sind fest. Beim ersten Start mit Auth entsteht
-`config/auth.yml` mit individuellen scrypt-Hashes, niemals Klartextpasswörtern.
+`config/auth.yml` (Linux-Installation: `/etc/livescore/auth.yml`) mit individuellen
+scrypt-Hashes, niemals Klartextpasswörtern.
 `auth.file` wird relativ zur Server-Config aufgelöst. Eine vorhandene ungültige
 Datei führt zum Startabbruch und wird nicht zurückgesetzt. Auth-Datei und Lock
 sind in `.gitignore`; andere selbst gewählte Secret-Pfade nicht versionieren.
@@ -287,7 +337,8 @@ wurde auf die weiterhin verwendete Version **1** korrigiert; es wurde keine
 V1→V2- oder zusätzliche Legacy-Migration eingeführt. Der Name lautet
 **Luis Ramon Pérez Macias**, ID `luis-ramon-perez-macias`.
 
-Zum Ausprobieren `/events` öffnen, **JSON importieren** aufklappen und
+Nach frischer Linux-Installation ist Prag bereits ausgewählt. Bei einem manuellen
+Checkout-Start zum Ausprobieren `/events` öffnen, **JSON importieren** aufklappen und
 `imports/prague-2026.json` oder die Beispieldatei auswählen. Die Vorschau nennt
 6 Teilnehmer, 6 Referees, eine Play Area und 14 Spiele. Nach **Importieren**
 und **Auswählen** ist die Veranstaltung bedienbar. Der Import selbst verändert
@@ -824,6 +875,8 @@ Für den automatisierten Browserlauf einmal Chromium installieren:
 .venv/bin/python -m playwright install chromium
 .venv/bin/python tests/browser_smoke.py
 .venv/bin/python tests/browser_auth_smoke.py
+# Zusätzlicher isolierter Installer-/Upgrade-/Uninstall-Test mit echter venv/pip:
+.venv/bin/python tests/deployment_smoke.py
 ```
 
 Alternativ einen vorhandenen Browser lesend verwenden:

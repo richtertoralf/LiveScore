@@ -1,0 +1,198 @@
+# Installation und Betrieb
+
+Die Linux-Installation trennt Programm, Konfiguration und Veranstaltungsdaten.
+Unterstützt wird Linux mit systemd und Python >= 3.12, insbesondere Ubuntu 24.04+
+und vergleichbare Distributionen. Die Anwendung selbst bleibt manuell unter
+Linux und Windows startbar. Die Installer benötigen Bash, Git, Python mit
+`venv`/`pip`, systemd und die üblichen Werkzeuge zur Dienstkontoanlage.
+
+Auf Ubuntu bei fehlenden Voraussetzungen einmal selbst installieren:
+
+```sh
+sudo apt-get install git python3 python3-venv
+```
+
+Der Installer verändert keine Paketquellen, Firewall, Proxy-Konfiguration oder
+fremden Dienste. PyPI-Zugriff ist für die Dependency-Installation erforderlich,
+GitHub-Zugriff für Remote-Upgrades; der laufende Veranstaltungsbetrieb ist offline
+möglich. Paketdownload-Fehler vor dem Umschalten lassen die alte Laufzeit bestehen.
+
+## Erstinstallation
+
+```sh
+git clone https://github.com/richtertoralf/LiveScore.git
+cd LiveScore
+sudo ./install.sh
+livescore --version
+systemctl status livescore
+```
+
+| Pfad | Inhalt |
+|---|---|
+| `/opt/livescore/releases/<Laufzeit>/` | Programmcode, VERSION, mitgelieferte Prag-Dateien, eigene `.venv` |
+| `/opt/livescore/current` | atomar wechselnder Link auf die aktuelle Laufzeit |
+| `/usr/local/bin/livescore` | Link zum CLI-Wrapper der aktuellen Laufzeit |
+| `/etc/livescore/livescore.yml` | lokale Serverkonfiguration |
+| `/etc/livescore/auth.yml` | lokale scrypt-Passworthashes; entsteht beim ersten Serverstart |
+| `/var/lib/livescore/data/events/*.json` | einzelne Veranstaltungen |
+| `/var/lib/livescore/data/active-event.json` | aktive Veranstaltung und Auswahlkennung |
+| `/var/lib/livescore/backups/` | Sicherung von Config/Auth und Daten vor jedem Upgrade |
+| `/etc/systemd/system/livescore.service` | Systemdienst mit eigenem Konto `livescore` |
+
+Die Betriebsverzeichnisse erhalten `.livescore-managed` als Herkunftsmarkierung.
+Unbekannte belegte Installationspfade, fremde CLI-/Unit-Dateien und Symlinks in
+Config-/Datenverzeichnissen werden abgewiesen. Das Dienstkonto hat keine Login-Shell.
+Der Programmcode gehört root; nur Config/Auth und Laufdaten sind für den Dienst
+schreibbar. Die Unit begrenzt Schreibzugriff auf diese Verzeichnisse.
+
+Die Installation liest `imports/prague-2026.json`, validiert das State-Modell
+und erzeugt bei fehlenden Veranstaltungsdaten `events/prague-2026.json` sowie
+den Auswahlzeiger auf `prague-2026`. Mitgeliefert sind 6 Participants samt Ländern,
+6 Referees, 14 Matches mit je 3 Officials, zwei Halbzeiten und der generische
+Teamfoul-Counter (Warnung bei 4, Critical/Double Penalty ab 5).
+Keine automatische Sportregel-, Tabellen- oder Play-off-Logik.
+
+Vorhandene Eventdateien, Legacy-Dateien, ein leerer gespeicherter Auswahlzeiger
+oder unbekannte Dateien verhindern den Seed. Allein liegengebliebene `.lock`-Dateien
+sind keine Veranstaltungsdaten. Normale Serverstarts führen keinen Seed aus;
+Upgrades ebenfalls nicht. `examples/prague-2026.json` ist dieselbe portable
+Veranstaltung für Import/Export und Tests. Der Installer verwendet ausschließlich
+die Datei unter `imports/` als Seed-Quelle.
+
+Die Abschlussmeldung nennt Version, URL und Pfade. Standardzugriff:
+
+- Web: `http://HOST:8730/`
+- öffentliche Live-API: `http://HOST:8730/api/v1/live`
+- öffentliche Version: `http://HOST:8730/api/version`
+
+Initial credentials: **admin / admin**, **operator / operator**.
+**Diese Passwörter vor Internetfreigabe ändern. HTTPS ist zwingend erforderlich.**
+Operator verwaltet alle fachlichen Veranstaltungs- und Live-Daten; Admin zusätzlich
+Benutzer/Passwörter. Der erste Admin-Login erzwingt dessen Passwortänderung.
+EN ist Default, DE und CS sind im Header wählbar. Die Version erscheint im Footer.
+
+## Konfiguration und manueller Betrieb
+
+Für die Installation `/etc/livescore/livescore.yml` bearbeiten, danach:
+
+```sh
+sudo systemctl restart livescore
+sudo journalctl -u livescore -n 100 --no-pager
+```
+
+Host und Port sind frei konfigurierbar. Der Installer unterstützt Datenpfade
+innerhalb `/var/lib/livescore/data` und Auth-Pfade innerhalb `/etc/livescore`.
+Andere Pfade sind beim manuellen Checkout-Betrieb möglich, werden vom automatischen
+Deployment aber abgewiesen, damit Backup, Rechtevergabe und Uninstall keine
+beliebigen fremden Verzeichnisse betreffen.
+
+Ein vorhandener Checkout mit lokalen Daten wird nicht automatisch verschoben.
+Für eine Übernahme den bisherigen Prozess kontrolliert beenden, die neue
+Installation stoppen, vorhandene Config passend übertragen und Event-Verzeichnis
+samt Auswahlzeiger sowie Auth-Datei gesichert übernehmen. Pfade anpassen und
+Dateien dem Dienstkonto `livescore` zuordnen. Erst nach Prüfung starten; die alten
+Originale als Backup behalten. Diese Übernahme wird nicht durch einen Reinstall
+erzwungen. Niemals zwei Prozesse auf dasselbe Datenverzeichnis starten.
+
+`livescore` ohne Option startet den Server im Vordergrund; bei laufendem Dienst
+verhindert die Prozesssperre eine zweite Instanz. Für normale Bedienung den
+Systemdienst verwenden. `livescore --config PFAD` ermöglicht einen ausdrücklich
+separaten manuellen Betrieb. `python -m livescore --version` funktioniert in der
+venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
+
+## Upgrade
+
+```sh
+sudo livescore --upgrade
+# Alternativ eine zuvor geprüfte lokale Quelle:
+sudo livescore --upgrade --source /pfad/zum/LiveScore-Checkout
+```
+
+Das Upgrade lädt `main` aus dem festen GitHub-Repository in ein temporäres
+Verzeichnis innerhalb der Installation. Es führt keinen Git-Pull in lokalen
+Betreiberdaten aus und benötigt keinen Git-Checkout in der installierten Laufzeit.
+Es kann auch einen ergänzten Stand derselben Versionsnummer installieren;
+Versionsrückschritte werden abgewiesen.
+
+Ablauf:
+
+1. Installierte Version und Zielversion nennen; Installation exklusiv sperren.
+2. Neue Programmdateien und neue venv neben der bisherigen Laufzeit anlegen.
+3. Requirements installieren, `pip check`, Python-Kompilation und Seedvalidierung.
+4. Vorhandene Config/Auth/Eventdateien lesend validieren. Fehlende Auth-Datei bei
+   aktiviertem Auth führt zum Abbruch, statt neue Startpasswörter zu erzeugen.
+5. Eigenen Dienst stoppen und Config/Auth sowie alle Veranstaltungsdaten sichern.
+6. `current` atomar umschalten, Unit aktualisieren, Dienst neu starten und öffentliche
+   Versionsantwort sowie systemd-Status prüfen.
+7. Bei Fehlern nach dem Umschalten zur bisherigen Laufzeit/Unit zurückkehren und
+   einen zuvor laufenden Dienst wieder starten. Config/Auth/Eventdaten werden nicht
+   durch alte Sicherungen überschrieben.
+
+Der letzte vorherige Programmstand bleibt zusätzlich unter `releases/` erhalten;
+ältere Programmlaufzeiten werden nach erfolgreichem Upgrade entfernt. Backups unter
+`/var/lib/livescore/backups` bleiben erhalten; sie enthalten vertrauliche
+Passworthashes und sollten regelmäßig extern gesichert und kontrolliert bereinigt
+werden. Ein manueller Code-Rollback erfordert einen gestoppten Dienst und das
+Zurücksetzen des `current`-Links auf den vorherigen Laufzeitpfad.
+
+Lokale Config wird nicht ersetzt. Auth-Hashes, Passwörter, Eventdateien, aktive
+Auswahl, Scores, Fouls und Officials bleiben erhalten. Es gibt keine zusätzliche
+Datenmigration. Ein Neustart beendet wie bisher alle Browser-Sessions; danach
+neu anmelden. Upgrades in einer geplanten Betriebspause durchführen.
+
+Bei Stromverlust während eines Deployments bleiben die Programmlaufzeiten und
+persistenten Daten separat erhalten; die atomare Umschaltung ist kein Ersatz für
+Backups. Nach einem unterbrochenen Vorgang `current`, Config und Dienststatus
+prüfen und gegebenenfalls den letzten Programmstand aktivieren.
+
+## Deinstallation
+
+```sh
+sudo /opt/livescore/current/uninstall.sh
+# Alternativ aus dem Checkout:
+sudo ./uninstall.sh
+```
+
+Entfernt ausschließlich LiveScore-Unit, CLI und Programmlaufzeiten inklusive venv.
+**Config, Auth, Veranstaltungsdaten, Backups und das Dienstkonto bleiben erhalten.**
+Eine spätere Installation übernimmt diese Daten, ohne Veranstaltungen oder
+Passwörter zurückzusetzen. Ein normaler Reinstall bei noch installiertem Programm
+bricht kontrolliert mit Verweis auf `livescore --upgrade` ab.
+
+Nur wenn auch alle lokalen Daten und Passwörter ausdrücklich gelöscht werden sollen:
+
+```sh
+sudo ./uninstall.sh --purge
+```
+
+`--purge` ist die ausdrückliche Löschbestätigung; es entfernt auch `/etc/livescore`
+und `/var/lib/livescore` samt Backups. Nach normalem Uninstall diesen Befehl aus
+dem Checkout ausführen, da die installierte Programmdatei dann fehlt. Das gesperrte
+Dienstkonto bleibt auch bei Purge bestehen; keine fremden Konten werden verändert.
+
+## Isolierte Verifikation
+
+```sh
+./install.sh --staging-root "$PWD/.test-artifacts/manual-install"
+.test-artifacts/manual-install/usr/local/bin/livescore --version
+.test-artifacts/manual-install/usr/local/bin/livescore --upgrade --source "$PWD"
+./uninstall.sh --staging-root "$PWD/.test-artifacts/manual-install"
+.venv/bin/python tests/deployment_smoke.py
+```
+
+Staging bildet alle Installationspfade unter dem angegebenen Root ab. Es erstellt
+keine Systemkonten, ruft kein systemctl auf und startet keinen Dienst. CLI und
+venv sind echt; ein manueller Teststart benötigt einen freien, ausdrücklich in
+der Staging-Config gewählten Port. Der Staging-Pfad wird in der installierten
+CLI hinterlegt, damit Upgrade/Uninstall ebenfalls isoliert bleiben.
+
+Der Deployment-Smoke erstellt echte venvs und installiert die Requirements,
+startet ausschließlich eigene Loopback-Prozesse und prüft Fresh-Seed, geändertes
+Admin-Passwort, Live-Score/Fouls, Upgrade, Restart, Reinstall-Abweisung,
+Uninstall-Datenerhalt und Purge. Unit-Tests ergänzen Schreibfehler, Rollback,
+Deployment-Lock, Fremdpfadschutz und Seed-Grenzfälle. Browser-Smokes prüfen die
+Version auf allen fünf Seiten und EN/DE/CS sowie die bisherigen Bedienabläufe.
+
+Auf codex-dev werden diese Tests nur unter `.test-artifacts/` ausgeführt.
+Ein echter systemweiter Installations-/systemd-Test wurde dort nicht ausgeführt;
+die bestehende Instanz und andere Dienste bleiben unberührt.

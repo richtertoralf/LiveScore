@@ -53,3 +53,32 @@ keine globale Portreservierung für alle künftigen Installationen.
 Reservierung in den gezielt geprüften Projektkonfigurationen. Host, Port und
 Datenpfad bleiben über `config/livescore.yml` einstellbar. Es wurden keine
 bestehenden Ports, Proxy-Konfigurationen oder Dienste verändert.
+
+## Installer, Upgrade und Web-Version
+
+Für den Deployment-Stand wurden zusätzlich ausschließlich lesend untersucht:
+
+- **winlaufen-web:** `installer/linux/install.sh`, `uninstall.sh`, Installer-Tests
+  sowie die Footer in Bridge-Control und Web-Viewer. Übernommen: Trennung
+  `/opt` / `/etc` / `/var/lib`, eigenes Dienstkonto, Staging-Root ohne Hostdienste,
+  Config-Erhalt, Daten behalten beim Uninstall und ausdrückliches `--purge`.
+  Der kleine Versionsfooter wird hier über eine öffentliche API statt Maven erzeugt.
+- **race-vision:** `install.sh`, `upgrade.sh`, `uninstall.sh`, Installer-Bibliothek.
+  Übernommen: GitHub/main bzw. lokale `--source`, neue venv vor Umschalten prüfen,
+  Rollback bei Startfehler, `/usr/local/bin`-CLI und geschützte Betreiberverzeichnisse.
+- **gfx-engineV2:** Installer, Upgrader und Lifecycle-/Versions-/Uninstaller-Tests.
+  Übernommen: explizite Dateien statt ganzer Arbeitskopie installieren, keine Git-
+  oder Secret-Dateien in der Laufzeit, Dependency-Prüfung vor Dienstunterbrechung.
+- **mediamtxMonitor:** Installer/Uninstaller und Lifecycle-Tests. Übernommen:
+  vorhandene fremde Pfade/Dienste als Konflikt behandeln, nicht nebenbei verändern.
+- **live-production-engine:** Bootstrap-Installer, systemd- und Prüfskriptstruktur.
+  Bestätigt: lokale Python-venv und expliziter Betriebscheck; MediaMTX/Redis und
+  andere dortige Abhängigkeiten werden für LiveScore nicht übernommen.
+
+LiveScore verwendet dünne Shell-Einstiege und einen gemeinsamen Python-Installer
+mit Standardbibliothek. Das hält Pfadprüfung, Dateiaustausch und Fehlerbehandlung
+für Install/Upgrade/Uninstall an einer Stelle. Die venv bleibt an einem stabilen
+Laufzeitpfad unter `releases/`; ein `current`-Link vermeidet das nachträgliche
+Umschreiben von venv-Shebangs. Es bleibt eine kleine Git-basierte Installation,
+keine eigene Paketverwaltung. Systempakete werden als Voraussetzung geprüft und
+nicht automatisch aktualisiert; so betrifft ein LiveScore-Upgrade nur LiveScore.

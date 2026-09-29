@@ -1,0 +1,12 @@
+# Nur Formatbeispiel. Platzhalter NICHT als echte Konfiguration verwenden.
+# Bei fehlender auth.yml erzeugt der Server die zwei Accounts mit individuellen
+# scrypt-Hashes. Danach Passwörter unter /users ändern.
+users:
+  admin:
+    role: admin
+    password_hash: "<scrypt hash>"
+    default_password: true
+  operator:
+    role: operator
+    password_hash: "<scrypt hash>"
+    default_password: true

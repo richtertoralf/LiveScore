@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n-title="Bedienung">LiveScore · Live control</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/live.js"></script>
+</head>
+<body>
+  <header>
+    <strong>LiveScore</strong>
+    <span id="connection" class="connection offline" role="status"><span data-i18n="Verbinde …">Connecting…</span></span>
+    <a id="config-link" href="/config"><span data-i18n="Konfiguration">Configuration</span></a>
+  </header>
+  <main>
+    <nav class="event-nav" aria-label="Event" data-i18n-aria="Veranstaltung"><span><span data-i18n="Aktiv:">Active:</span> <strong id="active-event-name"><span data-i18n="Lade …">Loading…</span></strong></span><a href="/events"><span data-i18n="Veranstaltungen">Events</span></a></nav>
+    <p id="event-name" class="muted"></p>
+    <p id="message" role="alert"></p>
+    <section id="live" aria-label="Match controls" data-i18n-aria="Spielbedienung"><p><span data-i18n="Spielstand wird geladen …">Loading match state…</span></p></section>
+    <footer><span data-i18n="L / R = links / rechts im Programmbild. Scores gehören zum Teilnehmer.">L / R = left / right in the program image. Scores belong to participants.</span></footer>
+  </main>
+  <dialog id="finish-dialog">
+    <h2><span data-i18n="Spiel beenden?">Finish match?</span></h2>
+    <p id="final-result"></p>
+    <button id="finish-cancel"><span data-i18n="Zurück">Back</span></button>
+    <button id="finish-confirm" class="danger"><span data-i18n="Ergebnis bestätigen">Confirm result</span></button>
+  </dialog>
+  <dialog id="period-dialog">
+    <h2 id="period-question"></h2>
+    <p><span data-i18n="Counter werden gemäß Sportprofil für den nächsten Abschnitt gesetzt. Bisherige Werte bleiben gespeichert. Score und Seiten bleiben erhalten.">Counters are set for the next period according to the sport profile. Previous values, scores and sides are preserved.</span></p>
+    <button id="period-cancel"><span data-i18n="Zurück">Back</span></button>
+    <button id="period-confirm" class="primary"><span data-i18n="Abschnitt starten">Start period</span></button>
+  </dialog>
+</body>
+</html>

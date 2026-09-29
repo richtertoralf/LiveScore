@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+.test-artifacts/
+config/local.yml
+config/auth.yml
+*.lock
+*.tmp
+codex-session-*.md

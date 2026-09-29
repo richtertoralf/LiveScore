@@ -1,0 +1,547 @@
+{
+  "schema_version": 1,
+  "revision": 0,
+  "event": {
+    "name": "13th Cup of Central Europe Cities 2026",
+    "date_from": "2026-10-03",
+    "date_to": "2026-10-04",
+    "location": "U Parku 140/3, Březiněves, Tschechien",
+    "logo_path": "",
+    "score_label": "Tore",
+    "sport_profile": {
+      "sport": "blind_football",
+      "ruleset": "IBSA 2025-2029",
+      "periods": 2,
+      "period_label": "Halbzeit",
+      "counters": [
+        {
+          "id": "team_fouls",
+          "label": "Fouls",
+          "scope": "participant",
+          "reset_each_period": true,
+          "warning_at": 4,
+          "critical_at": 5,
+          "warning_label": "Nächstes Foul → Double Penalty",
+          "critical_label": "Double Penalty"
+        }
+      ]
+    }
+  },
+  "play_areas": [
+    {
+      "id": "field-1",
+      "label": "Field 1"
+    }
+  ],
+  "participants": [
+    {
+      "id": "bsc-praha",
+      "name": "BSC Praha",
+      "short_name": "BSC",
+      "logo_path": "",
+      "country_code": "CZ"
+    },
+    {
+      "id": "fc-ingolstadt-04",
+      "name": "FC Ingolstadt 04",
+      "short_name": "FCI",
+      "logo_path": "",
+      "country_code": "DE"
+    },
+    {
+      "id": "kairat-almaty",
+      "name": "Kairat Almaty",
+      "short_name": "KAI",
+      "logo_path": "",
+      "country_code": "KZ"
+    },
+    {
+      "id": "asamea-keravnos",
+      "name": "ASAMEA Keravnos Athens",
+      "short_name": "ASK",
+      "logo_path": "",
+      "country_code": "GR"
+    },
+    {
+      "id": "blista-marburg",
+      "name": "SF B/G BLISTA Marburg",
+      "short_name": "SFB",
+      "logo_path": "",
+      "country_code": "DE"
+    },
+    {
+      "id": "fc-schalke-04",
+      "name": "FC Schalke 04",
+      "short_name": "S04",
+      "logo_path": "",
+      "country_code": "DE"
+    }
+  ],
+  "referees": [
+    {
+      "id": "luis-ramon-perez-macias",
+      "name": "Luis Ramon Pérez Macias",
+      "country_code": "ES"
+    },
+    {
+      "id": "bennet-kruekemeier",
+      "name": "Bennet Krükemeier",
+      "country_code": "DE"
+    },
+    {
+      "id": "juan-carlos-paule",
+      "name": "Juan Carlos Paule",
+      "country_code": "ES"
+    },
+    {
+      "id": "philipp-eilers",
+      "name": "Philipp Eilers",
+      "country_code": "DE"
+    },
+    {
+      "id": "carsten-raschke",
+      "name": "Carsten Raschke",
+      "country_code": "DE"
+    },
+    {
+      "id": "tamas-jeszo",
+      "name": "Tamás Jeszo",
+      "country_code": "HU"
+    }
+  ],
+  "matches": [
+    {
+      "id": "match-001",
+      "date": "2026-10-03",
+      "time": "09:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "bsc-praha",
+      "participant_2": "fc-ingolstadt-04",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "luis-ramon-perez-macias",
+        "bennet-kruekemeier",
+        "juan-carlos-paule"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "bsc-praha": {
+            "1": 0,
+            "2": 0
+          },
+          "fc-ingolstadt-04": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-002",
+      "date": "2026-10-03",
+      "time": "10:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "kairat-almaty",
+      "participant_2": "asamea-keravnos",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "juan-carlos-paule",
+        "philipp-eilers",
+        "carsten-raschke"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "kairat-almaty": {
+            "1": 0,
+            "2": 0
+          },
+          "asamea-keravnos": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-003",
+      "date": "2026-10-03",
+      "time": "11:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "blista-marburg",
+      "participant_2": "fc-schalke-04",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "luis-ramon-perez-macias",
+        "tamas-jeszo",
+        "bennet-kruekemeier"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "blista-marburg": {
+            "1": 0,
+            "2": 0
+          },
+          "fc-schalke-04": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-004",
+      "date": "2026-10-03",
+      "time": "12:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "asamea-keravnos",
+      "participant_2": "bsc-praha",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "carsten-raschke",
+        "philipp-eilers",
+        "luis-ramon-perez-macias"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "asamea-keravnos": {
+            "1": 0,
+            "2": 0
+          },
+          "bsc-praha": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-005",
+      "date": "2026-10-03",
+      "time": "13:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "fc-ingolstadt-04",
+      "participant_2": "blista-marburg",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "juan-carlos-paule",
+        "tamas-jeszo",
+        "philipp-eilers"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "fc-ingolstadt-04": {
+            "1": 0,
+            "2": 0
+          },
+          "blista-marburg": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-006",
+      "date": "2026-10-03",
+      "time": "14:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "fc-schalke-04",
+      "participant_2": "kairat-almaty",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "bennet-kruekemeier",
+        "carsten-raschke",
+        "tamas-jeszo"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "fc-schalke-04": {
+            "1": 0,
+            "2": 0
+          },
+          "kairat-almaty": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-007",
+      "date": "2026-10-03",
+      "time": "15:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "bsc-praha",
+      "participant_2": "blista-marburg",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "luis-ramon-perez-macias",
+        "juan-carlos-paule",
+        "carsten-raschke"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "bsc-praha": {
+            "1": 0,
+            "2": 0
+          },
+          "blista-marburg": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-008",
+      "date": "2026-10-03",
+      "time": "16:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "fc-schalke-04",
+      "participant_2": "asamea-keravnos",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "philipp-eilers",
+        "bennet-kruekemeier",
+        "juan-carlos-paule"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "fc-schalke-04": {
+            "1": 0,
+            "2": 0
+          },
+          "asamea-keravnos": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-009",
+      "date": "2026-10-03",
+      "time": "17:30:00",
+      "play_area_id": "field-1",
+      "round": "Gruppe A",
+      "participant_1": "kairat-almaty",
+      "participant_2": "fc-ingolstadt-04",
+      "placeholder_1": "Noch offen",
+      "placeholder_2": "Noch offen",
+      "officials": [
+        "tamas-jeszo",
+        "carsten-raschke",
+        "bennet-kruekemeier"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {
+          "kairat-almaty": {
+            "1": 0,
+            "2": 0
+          },
+          "fc-ingolstadt-04": {
+            "1": 0,
+            "2": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "match-010",
+      "date": "2026-10-04",
+      "time": "08:30:00",
+      "play_area_id": "field-1",
+      "round": "semi final #1",
+      "participant_1": null,
+      "participant_2": null,
+      "placeholder_1": "1st Gruppe A",
+      "placeholder_2": "4th Gruppe A",
+      "officials": [
+        "philipp-eilers",
+        "tamas-jeszo",
+        "luis-ramon-perez-macias"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {}
+      }
+    },
+    {
+      "id": "match-011",
+      "date": "2026-10-04",
+      "time": "09:30:00",
+      "play_area_id": "field-1",
+      "round": "semi final #2",
+      "participant_1": null,
+      "participant_2": null,
+      "placeholder_1": "2nd Gruppe A",
+      "placeholder_2": "3rd Gruppe A",
+      "officials": [
+        "juan-carlos-paule",
+        "bennet-kruekemeier",
+        "philipp-eilers"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {}
+      }
+    },
+    {
+      "id": "match-012",
+      "date": "2026-10-04",
+      "time": "10:30:00",
+      "play_area_id": "field-1",
+      "round": "match for place 5th",
+      "participant_1": null,
+      "participant_2": null,
+      "placeholder_1": "5th Gruppe A",
+      "placeholder_2": "6th Gruppe A",
+      "officials": [
+        "luis-ramon-perez-macias",
+        "carsten-raschke",
+        "tamas-jeszo"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {}
+      }
+    },
+    {
+      "id": "match-013",
+      "date": "2026-10-04",
+      "time": "11:30:00",
+      "play_area_id": "field-1",
+      "round": "bronze medal match",
+      "participant_1": null,
+      "participant_2": null,
+      "placeholder_1": "Loser semi final #1",
+      "placeholder_2": "Loser semi final #2",
+      "officials": [
+        "bennet-kruekemeier",
+        "tamas-jeszo",
+        "carsten-raschke"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {}
+      }
+    },
+    {
+      "id": "match-014",
+      "date": "2026-10-04",
+      "time": "12:30:00",
+      "play_area_id": "field-1",
+      "round": "gold medal match",
+      "participant_1": null,
+      "participant_2": null,
+      "placeholder_1": "Winner semi final #1",
+      "placeholder_2": "Winner semi final #2",
+      "officials": [
+        "luis-ramon-perez-macias",
+        "philipp-eilers",
+        "juan-carlos-paule"
+      ],
+      "status": "scheduled",
+      "side_l": null,
+      "side_r": null,
+      "scores": {},
+      "control_revision": 0,
+      "period": 1,
+      "counters": {
+        "team_fouls": {}
+      }
+    }
+  ],
+  "active_match_id": null,
+  "events": []
+}

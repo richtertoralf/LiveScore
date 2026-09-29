@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title data-i18n-title="Benutzer">LiveScore · Users</title><link rel="stylesheet" href="/static/style.css"><script type="module" src="/static/auth-ui.js"></script></head>
+<body><header><strong>LiveScore</strong><a href="/" data-i18n="Bedienung">Live control</a></header><main>
+<h1 data-i18n="Benutzer">Users</h1><p id="message" role="alert"></p><section id="users-list"></section>
+<form id="password-form" class="panel" hidden>
+<h2 id="password-user"></h2><input name="username" type="hidden">
+<label for="new-password" data-i18n="Neues Passwort">New password</label><input id="new-password" name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="1024">
+<label for="repeat-password" data-i18n="Passwort wiederholen">Repeat password</label><input id="repeat-password" name="repeat" type="password" autocomplete="new-password" required minlength="12" maxlength="1024">
+<p data-i18n="Mindestens 12 Zeichen.">At least 12 characters.</p><button type="submit" class="primary" data-i18n="Passwort ändern">Change password</button>
+</form></main></body></html>

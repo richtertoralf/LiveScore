@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n-title="Konfiguration">LiveScore · Configuration</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/config.js"></script>
+</head>
+<body>
+  <header>
+    <strong>LiveScore</strong>
+    <span id="connection" class="connection offline" role="status"><span data-i18n="Verbinde …">Connecting…</span></span>
+    <a href="/"><span data-i18n="Zur Bedienung">Back to live control</span></a>
+  </header>
+  <main>
+    <nav class="event-nav" aria-label="Event" data-i18n-aria="Veranstaltung"><span><span data-i18n="Aktiv:">Active:</span> <strong id="active-event-name"><span data-i18n="Lade …">Loading…</span></strong></span><a href="/events"><span data-i18n="Veranstaltungen">Events</span></a></nav>
+    <h1><span data-i18n="Veranstaltung einrichten">Configure event</span></h1>
+    <p class="muted config-info"><span data-i18n="Veranstaltung → Play Areas → Teilnehmer / Referees → Spielplan. Vorhandene Einträge zum Bearbeiten auswählen. IDs bleiben unverändert.">Event → Play areas → Participants / Referees → Schedule. Select existing entries to edit. IDs stay unchanged.</span></p>
+    <p id="message" role="alert"></p>
+    <p id="config-status" role="status"></p>
+    <div id="forms"></div>
+    <footer><span data-i18n="Alle Daten werden lokal gespeichert. Logos werden als Pfad hinterlegt; kein Upload. Finale Paarungen können zunächst offen bleiben.">All data is stored locally. Logos are stored as paths; no upload. Final pairings may be left open.</span></footer>
+  </main>
+</body>
+</html>

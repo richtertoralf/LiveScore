@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title data-i18n-title="Veranstaltungen">LiveScore · Events</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/events.js"></script>
+</head>
+<body>
+  <header>
+    <strong>LiveScore</strong>
+    <span id="connection" class="connection offline" role="status"><span data-i18n="Verbinde …">Connecting…</span></span>
+    <a href="/"><span data-i18n="Bedienung">Live control</span></a>
+  </header>
+  <main>
+    <nav class="event-nav" aria-label="Event" data-i18n-aria="Veranstaltung"><span><span data-i18n="Aktiv:">Active:</span> <strong id="active-event-name"><span data-i18n="Lade …">Loading…</span></strong></span><a href="/config"><span data-i18n="Konfiguration">Configuration</span></a></nav>
+    <h1><span data-i18n="Veranstaltungen">Events</span></h1>
+    <p class="muted"><span data-i18n="Lokal vorbereiten und speichern. Genau eine Veranstaltung wird gemeinsam bedient.">Prepare and save locally. Everyone operates the same active event.</span></p>
+    <p id="message" role="alert"></p>
+    <p id="switch-status" role="status"></p>
+    <section id="catalog-list" aria-label="Saved events" data-i18n-aria="Gespeicherte Veranstaltungen"></section>
+    <details id="new-event">
+      <summary><span data-i18n="+ Neue Veranstaltung">+ New event</span></summary>
+      <form id="create-event">
+        <label for="new-name"><span data-i18n="Name">Name</span></label><input id="new-name" name="name" required maxlength="200">
+        <div class="form-grid">
+          <div><label for="new-from"><span data-i18n="Datum von">Start date</span></label><input id="new-from" name="date_from" type="date" required></div>
+          <div><label for="new-to"><span data-i18n="Datum bis">End date</span></label><input id="new-to" name="date_to" type="date" required></div>
+        </div>
+        <label for="new-location"><span data-i18n="Ort">Location</span></label><input id="new-location" name="location" maxlength="200">
+        <label for="new-score"><span data-i18n="Score-Bezeichnung">Score label</span></label><input id="new-score" name="score_label" value="Score" required maxlength="200">
+        <button type="submit" class="primary"><span data-i18n="Veranstaltung anlegen">Create event</span></button>
+      </form>
+    </details>
+    <details id="json-import">
+      <summary><span data-i18n="JSON importieren">Import JSON</span></summary>
+      <p class="muted"><span data-i18n="Native LiveScore-State-Datei, maximal 10 MiB. Erst nach Vorschau und Bestätigung wird gespeichert.">Native LiveScore state file, up to 10 MiB. Saved only after preview and confirmation.</span></p>
+      <label for="import-file"><span data-i18n="JSON-Datei auswählen">Choose JSON file</span></label>
+      <input id="import-file" type="file" accept=".json,application/json">
+      <section id="import-preview" class="panel" hidden aria-label="Import preview" data-i18n-aria="Import-Vorschau"></section>
+    </details>
+    <footer><span data-i18n="Importe und neue Veranstaltungen werden zusätzlich gespeichert. Die aktive Auswahl ändert sich erst mit „Auswählen“.">Imports and new events are saved separately. Use Select to change the active event.</span></footer>
+  </main>
+</body>
+</html>

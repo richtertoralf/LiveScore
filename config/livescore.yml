@@ -1,0 +1,9 @@
+# Relative Datenpfade beziehen sich auf dieses Config-Verzeichnis.
+bind_host: 0.0.0.0
+port: 8730
+data_dir: ../data
+auth:
+  enabled: true
+  file: auth.yml
+  session_hours: 12
+  secure_cookie: false

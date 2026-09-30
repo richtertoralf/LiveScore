@@ -1,7 +1,7 @@
 import { t, errorText } from './i18n.js';
 import { csrfHeaders, isAdmin } from './auth-client.js';
 import { $, escape as e, Connection, message } from './common.js';
-let preview = null, uploadGeneration = 0;
+let preview = null, uploadGeneration = 0, resetTarget = null;
 const app = new Connection(render);
 function description(event) {
   return `${e(event?.date_from || '')}${event?.date_to !== event?.date_from ? ' – ' + e(event?.date_to || '') : ''}${event?.location ? ' · ' + e(event.location) : ''}`;
@@ -12,8 +12,13 @@ function render(state) {
   $('#switch-status').textContent = blocked ? t('Wechsel gesperrt: Spiel zuerst beenden oder Vorbereitung zurücknehmen.') : '';
   $('#catalog-list').innerHTML = state.catalog.items.map(item => {
     const active = item.id === state.active_event_id;
-    return `<article class="panel ${active ? 'active-event' : ''}" data-event-id="${e(item.id)}"><h2>${e(item.event?.name || t('Noch nicht eingerichtet'))}${active ? ' · ' + t('AKTIV') : ''}</h2><p class="muted">${description(item.event)}</p><p>${item.matches} ${t("Spiele")} · ${item.participants} ${t("Teilnehmer")} · ${item.referees} ${t("Referees")} · ${item.play_areas} ${t("Play Areas")}</p><div class="event-buttons"><button data-action="select-event" data-id="${e(item.id)}" data-disabled="${active}" class="${active ? '' : 'primary'}">${active ? t('Ausgewählt') : t('Auswählen')}</button><a href="/api/v1/event-catalog/${encodeURIComponent(item.id)}/export" download>${t("JSON exportieren")}</a></div></article>`;
+    // Nur Admins: Veranstaltung aus der gespeicherten Importdatei neu einlesen.
+    const reset = !isAdmin() ? '' : item.reset_available
+      ? `<button data-action="reset-event" data-id="${e(item.id)}" class="danger" data-disabled="${active && blocked}">${t('Zurücksetzen')}</button>`
+      : `<p class="muted">${t('Zurücksetzen erst nach einem JSON-Import dieser Veranstaltung möglich.')}</p>`;
+    return `<article class="panel ${active ? 'active-event' : ''}" data-event-id="${e(item.id)}"><h2>${e(item.event?.name || t('Noch nicht eingerichtet'))}${active ? ' · ' + t('AKTIV') : ''}</h2><p class="muted">${description(item.event)}</p><p>${item.matches} ${t("Spiele")} · ${item.participants} ${t("Teilnehmer")} · ${item.referees} ${t("Referees")} · ${item.play_areas} ${t("Play Areas")}</p><div class="event-buttons"><button data-action="select-event" data-id="${e(item.id)}" data-disabled="${active}" class="${active ? '' : 'primary'}">${active ? t('Ausgewählt') : t('Auswählen')}</button><a href="/api/v1/event-catalog/${encodeURIComponent(item.id)}/export" download>${t("JSON exportieren")}</a>${reset}</div></article>`;
   }).join('') || `<p>${t("Noch keine Veranstaltungen gespeichert.")}</p>`;
+  if ($('#reset-dialog').open && !state.catalog.items.some(item => item.id === resetTarget?.id && item.reset_available)) $('#reset-dialog').close();
   if (preview && preview.session !== state.stream_id) {
     preview = null; $('#import-preview').hidden = true; $('#replace-dialog').close();
     message(t('Server wurde neu gestartet. Bitte Import-Vorschau erneut laden.'));
@@ -22,6 +27,11 @@ function render(state) {
 $('#catalog-list').addEventListener('click', async event => {
   const button = event.target.closest('button[data-action]');
   if (!button || button.disabled) return;
+  if (button.dataset.action === 'reset-event') {
+    const item = app.state.catalog.items.find(entry => entry.id === button.dataset.id);
+    resetTarget = {id:item.id, session:app.state.stream_id};
+    $('#reset-name').textContent = item.event?.name || item.id; $('#reset-dialog').showModal(); return;
+  }
   const result = await app.send('event-catalog/select',{event_id:button.dataset.id,selection_token:app.state.selection_token});
   if (result) message(t('Veranstaltung ausgewählt. Bedienung und Konfiguration verwenden jetzt diese Veranstaltung.'));
 });
@@ -86,4 +96,11 @@ $('#replace-confirm').onclick = async () => {
     preview = null; $('#import-preview').hidden = true; $('#import-file').value = '';
     message(t('Veranstaltung ersetzt. Alle Daten entsprechen jetzt der Importdatei.'));
   }
+};
+$('#reset-cancel').onclick = () => $('#reset-dialog').close();
+$('#reset-confirm').onclick = async () => {
+  $('#reset-dialog').close();
+  if (!resetTarget || resetTarget.session !== app.state.stream_id) { message(t('Server wurde neu gestartet. Bitte Anzeige prüfen.')); return; }
+  if (await app.send('event-catalog/reset',{event_id:resetTarget.id}))
+    message(t('Veranstaltung zurückgesetzt. Alle Daten entsprechen wieder der gespeicherten Importdatei.'));
 };

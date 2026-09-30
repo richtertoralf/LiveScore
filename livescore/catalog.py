@@ -1,4 +1,4 @@
-"""Einzelne portable States; nur Auswahl und ihre Kennung liegen separat."""
+"""Einzelne portable States; Auswahl und gespeicherte Importdateien liegen separat."""
 import asyncio
 import hashlib
 import hmac
@@ -48,6 +48,10 @@ class ReplaceEvent(ImportPreview, CatalogCommand):
     preview_token: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
+class ResetEvent(CatalogCommand):
+    event_id: ID
+
+
 def event_id_for(state):
     event = state.event
     name = event.name if event else 'Veranstaltung'
@@ -69,6 +73,8 @@ class Catalog(Service):
         # The application holds the catalogue and legacy process leases first.
         self.directory = directory
         self.events_dir = directory / 'events'
+        # Kopie der zuletzt importierten Datei je Veranstaltung; Grundlage für „Zurücksetzen“.
+        self.imports_dir = directory / 'imports'
         self.selection_path = directory / 'active-event.json'
         self.states = {}
         if self.events_dir.is_symlink():
@@ -105,13 +111,18 @@ class Catalog(Service):
         TypeAdapter(ID).validate_python(event_id)
         return self.events_dir / (event_id + '.json')
 
+    def import_path(self, event_id):
+        TypeAdapter(ID).validate_python(event_id)
+        return self.imports_dir / (event_id + '.json')
+
     def listing(self):
         items = []
         for event_id, state in self.states.items():
             event = state.event
             items.append(dict(id=event_id, event=event.model_dump(mode='json') if event else None,
                               participants=len(state.participants), play_areas=len(state.play_areas),
-                              matches=len(state.matches), referees=len(state.referees)))
+                              matches=len(state.matches), referees=len(state.referees),
+                              reset_available=self.import_path(event_id).is_file()))
         return dict(active_event_id=self.selection.active_event_id,
                     selection_token=str(self.selection.selection_token),
                     items=sorted(items, key=lambda item: ((item['event'] or {}).get('date_from', ''), item['id'])))
@@ -159,6 +170,30 @@ class Catalog(Service):
                     collision=event_id in self.states or self.event_path(event_id).exists(),
                     preview_token=self.preview_token(state, event_id))
 
+    def restorable(self, event_id):
+        """Prüft, ob eine vorhandene Veranstaltung ersetzt werden darf; True, wenn sie aktiv ist."""
+        if event_id not in self.states:
+            raise Conflict('Veranstaltung nicht gefunden.')
+        active = event_id == self.selection.active_event_id
+        match = current_match(self.state) if active else None
+        if match and match.status in ('ready', 'live', 'paused'):
+            raise Conflict('Aktuell ist ein Spiel vorbereitet oder aktiv. Beende das Spiel bzw. setze die Vorbereitung zurück, bevor du die Veranstaltung ersetzt oder zurücksetzt.')
+        return active
+
+    async def restore(self, event_id, state, active):
+        # Revision bleibt monoton; eine neue Auswahlkennung macht offene Aktionen alter Anzeigen ungültig.
+        state.revision = max(state.revision, self.states[event_id].revision) + 1
+        cancelled = False
+        if active:
+            selection = Selection(active_event_id=event_id)
+            cancelled = await persist(save_selection, self.selection_path, selection)
+            self.selection = selection
+        cancelled = await persist(storage.save, self.event_path(event_id), state) or cancelled
+        self.states[event_id] = state
+        if active:
+            self.state = state
+        return cancelled
+
     async def catalog_apply(self, operation, command):
         signature = hashlib.sha256((operation + command.model_dump_json()).encode()).hexdigest()
         async with self.lock:
@@ -186,27 +221,21 @@ class Catalog(Service):
                 self.path = self.event_path(command.event_id)
                 self.state = self.states[command.event_id]
             elif operation == 'replace':
-                # Admin-Reset: vorhandene Veranstaltung vollständig durch die geprüfte Importdatei ersetzen.
+                # Admin: vorhandene Veranstaltung vollständig durch die geprüfte Datei ersetzen;
+                # die Datei wird zugleich die neue Grundlage für „Zurücksetzen“.
                 state, desired = self.validate_import(command)
                 if not hmac.compare_digest(command.preview_token, self.preview_token(state, desired)):
                     raise Conflict('Import-Vorschau ist nicht mehr gültig. Datei erneut prüfen.')
-                if desired not in self.states:
-                    raise Conflict('Veranstaltung nicht gefunden.')
-                active = desired == self.selection.active_event_id
-                match = current_match(self.state) if active else None
-                if match and match.status in ('ready', 'live', 'paused'):
-                    raise Conflict('Aktuell ist ein Spiel vorbereitet oder aktiv. Beende das Spiel bzw. setze die Vorbereitung zurück, bevor du die Veranstaltung ersetzt.')
-                # Revision bleibt monoton; eine neue Auswahlkennung macht offene Aktionen alter Anzeigen ungültig.
-                state.revision = max(state.revision, self.states[desired].revision) + 1
-                cancelled = False
-                if active:
-                    selection = Selection(active_event_id=desired)
-                    cancelled = await persist(save_selection, self.selection_path, selection)
-                    self.selection = selection
-                cancelled = await persist(storage.save, self.event_path(desired), state) or cancelled
-                self.states[desired] = state
-                if active:
-                    self.state = state
+                active = self.restorable(desired)
+                cancelled = await persist(storage.save, self.import_path(desired), state)
+                cancelled = await self.restore(desired, state, active) or cancelled
+            elif operation == 'reset':
+                # Admin: Veranstaltung aus der gespeicherten Importdatei neu einlesen.
+                active = self.restorable(command.event_id)
+                path = self.import_path(command.event_id)
+                if path.is_symlink() or not path.is_file():
+                    raise Conflict('Für diese Veranstaltung ist keine Importdatei gespeichert.')
+                cancelled = await self.restore(command.event_id, storage.load(path), active)
             else:
                 if operation == 'create':
                     state = State(event=command.event)
@@ -218,7 +247,10 @@ class Catalog(Service):
                     if not command.as_new and (desired in self.states or self.event_path(desired).exists()):
                         raise Conflict('Eine Veranstaltung mit dieser ID existiert bereits. Als neue Veranstaltung importieren.')
                     created = self.available_id(desired) if command.as_new else desired
-                cancelled = await persist(storage.save, self.event_path(created), state)
+                cancelled = False
+                if operation == 'import':
+                    cancelled = await persist(storage.save, self.import_path(created), state)
+                cancelled = await persist(storage.save, self.event_path(created), state) or cancelled
                 self.states[created] = state
             self.receipts[str(command.request_id)] = (signature, created)
             result = dict(self.changed(), created_event_id=created)

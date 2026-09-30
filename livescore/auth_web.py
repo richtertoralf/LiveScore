@@ -1,4 +1,4 @@
-"""HTTP-Zugriffsschutz; fachliche APIs bleiben bis auf das Ersetzen einer Veranstaltung von Rollen unabhängig."""
+"""HTTP-Zugriffsschutz; fachliche APIs bleiben bis auf Ersetzen/Zurücksetzen einer Veranstaltung von Rollen unabhängig."""
 import hmac
 import secrets
 from urllib.parse import urlsplit
@@ -46,7 +46,7 @@ def install_auth(app, root):
                 return RedirectResponse('/users', status_code=303)
             return error('password_required', 403)
         admin_only = (path in ('/users', '/docs', '/redoc', '/openapi.json', '/docs/oauth2-redirect', '/static/users.html',
-                               '/api/v1/event-catalog/replace')
+                               '/api/v1/event-catalog/replace', '/api/v1/event-catalog/reset')
                       or path.startswith('/api/auth/'))
         if admin_only and session.username != 'admin':
             return error('forbidden', 403)

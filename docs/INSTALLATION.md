@@ -67,6 +67,7 @@ beschriebenen Username-/Token-Abfrage.
 | `/etc/livescore/livescore.yml` | lokale Serverkonfiguration |
 | `/etc/livescore/auth.yml` | lokale scrypt-Passworthashes; entsteht beim ersten Serverstart |
 | `/var/lib/livescore/data/events/*.json` | einzelne Veranstaltungen |
+| `/var/lib/livescore/data/imports/*.json` | gespeicherte Importdateien als Grundlage für „Zurücksetzen“ |
 | `/var/lib/livescore/data/active-event.json` | aktive Veranstaltung und Auswahlkennung |
 | `/var/lib/livescore/backups/` | Sicherung von Config/Auth und Daten vor jedem Upgrade |
 | `/etc/systemd/system/livescore.service` | Systemdienst mit eigenem Konto `livescore` |

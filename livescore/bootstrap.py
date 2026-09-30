@@ -47,14 +47,18 @@ def seed_if_empty(config_path, source):
         if any(p.is_file() and not p.name.endswith('.lock') for p in directory.rglob('*')):
             return False
         target = directory / 'events' / f'{source.stem}.json'
+        # Kopie der Seed-Datei als Grundlage für „Zurücksetzen“ (wie beim GUI-Import).
+        original = directory / 'imports' / f'{source.stem}.json'
         selection = directory / 'active-event.json'
         # Selection validates the filename before any write.
         chosen = Selection(active_event_id=source.stem)
         save(target, state)
         try:
+            save(original, state)
             save_selection(selection, chosen)
         except BaseException:
             target.unlink()
+            original.unlink(missing_ok=True)
             raise
         return True
 

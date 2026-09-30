@@ -101,6 +101,14 @@ async def run(executable):
                 await expect(admin.locator('#catalog-list article')).to_have_count(1)
                 await admin.locator('[data-action="select-event"]').click()
                 await expect(admin.locator('.active-event')).to_have_count(1)
+                # Admin sieht „Zurücksetzen“; der Dialog liegt in allen drei Sprachen vor.
+                for code,title,confirm in [('cs','Obnovit událost?','Obnovit'),('de','Veranstaltung zurücksetzen?','Zurücksetzen'),('en','Reset event?','Reset')]:
+                    await language(admin,code)
+                    await expect(admin.locator('[data-action="reset-event"]')).to_be_enabled()
+                    await admin.locator('[data-action="reset-event"]').click()
+                    await expect(admin.locator('#reset-dialog h2')).to_have_text(title)
+                    await expect(admin.locator('#reset-confirm')).to_have_text(confirm)
+                    await admin.locator('#reset-cancel').click()
                 for code,heading in [('en','Configure event'),('de','Veranstaltung einrichten'),('cs','Nastavit událost')]:
                     await admin.goto(url+'/config'); await language(admin,code)
                     await expect(admin.locator('h1')).to_have_text(heading)
@@ -116,6 +124,7 @@ async def run(executable):
                 await expect(a.locator('#new-event')).to_be_visible()
                 await expect(a.locator('#json-import')).to_be_visible()
                 await expect(a.locator('a[download]')).to_be_visible()
+                await expect(a.locator('[data-action="reset-event"]')).to_have_count(0)
                 assert (await a.request.get(url+'/config')).status==200
                 assert (await a.request.get(url+'/users')).status==403
                 assert (await a.request.get(url+'/api/v1/event-catalog/prague-2026/export')).status==200
@@ -128,6 +137,7 @@ async def run(executable):
                 await a.locator('#json-import summary').click()
                 await a.locator('#import-file').set_input_files(ROOT/'imports/prague-2026.json')
                 await expect(a.locator('[data-action="confirm-import"]')).to_have_text('Import as new event')
+                await expect(a.locator('[data-action="replace-import"]')).to_have_count(0)
                 await a.locator('[data-action="confirm-import"]').click()
                 await expect(a.locator('#catalog-list article')).to_have_count(3)
                 async with a.expect_download() as exported:
@@ -173,7 +183,7 @@ async def run(executable):
                 await expect(admin.locator('#score-L')).to_have_text('1')
                 assert not errors,errors
                 await browser.close()
-                print('PASS: EN default, DE/CS switch and persistence, EN fallback, login errors, forced admin change, all password resets/default warnings, admin import/config, operator full event permissions and admin-only password management; anonymous curl live GET, two logged-in operators synchronize score/counter/period, session invalidation incl. WebSockets/logout/restart; no JS errors, no viewport overflow.')
+                print('PASS: EN default, DE/CS switch and persistence, EN fallback, login errors, forced admin change, all password resets/default warnings, admin import/config, admin-only reset/replace (reset dialog EN/DE/CS), operator full event permissions and admin-only password management; anonymous curl live GET, two logged-in operators synchronize score/counter/period, session invalidation incl. WebSockets/logout/restart; no JS errors, no viewport overflow.')
         finally:
             if process and process.poll() is None: process.terminate();process.wait(timeout=10)
             log.close()

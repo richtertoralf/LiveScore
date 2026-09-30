@@ -349,10 +349,21 @@ async def run(executable):
                 reset = await (await page_a.request.get(url+'/api/v1/tournament')).json()
                 assert all(m['status'] == 'scheduled' for m in reset['matches']) and reset['matches'][9]['participant_1'] is None
                 assert (await (await page_a.request.get(url+'/api/v1/live')).json())['status'] == 'idle'
+                # Zurücksetzen-Button: Veranstaltung ohne erneute Dateiauswahl aus der gespeicherten Importdatei einlesen.
+                await page_b.locator('.match-item').first.click()
+                await action(page_b,'prepare'); await action(page_b,'start'); await action(page_b,'score-L-1')
+                await action(page_b,'finish-dialog'); await page_b.locator('#finish-confirm').click()
+                await expect(page_b.locator('.status')).to_have_text('BEENDET')
+                await page_a.locator('[data-action="reset-event"][data-id="prague-2026"]').click(); await page_a.locator('#reset-cancel').click()
+                await expect(page_b.locator('.status')).to_have_text('BEENDET')
+                await page_a.locator('[data-action="reset-event"][data-id="prague-2026"]').click(); await page_a.locator('#reset-confirm').click()
+                await expect(page_a.locator('#message')).to_have_text('Veranstaltung zurückgesetzt. Alle Daten entsprechen wieder der gespeicherten Importdatei.')
+                await expect(page_b.locator('.match-item')).to_have_count(14)
+                await expect(page_b.locator('[data-action="toggle-finished"]')).to_have_count(0)
                 assert len((await (await page_a.request.get(url+'/api/v1/event-catalog')).json())['items']) == 3
                 assert not errors, errors
                 await browser.close()
-                print('PASS: Participant-Ländercodes, Prag-Profil, Counter +/−, Warnung bei 4, Critical bei 5/6, parallele Counter in zwei Browsern, Seitenwechsel, bestätigter/abgebrochener/veralteter Periodendialog, Periodenhistorie und echter Neustart in Periode 2; Prag-Datei (6 Referees, 14 Matches mit je 3 Officials), Referee-Anlage/Bearbeitung, Officials-Auswahl, Export/Reimport vollständig; Event-Neuanlage, Dateiimport mit Preview/Kollision/Abbruch, Event-Wechsel, Config-Entwurf verworfen, Isolation; Paarungskorrektur, parallele Scores, Doppelklick, Undo, Pause, Offline/Reconnect, Reload, Ergebnisbestätigung, Spiel wieder öffnen, beendetes Spiel erneut auswählen/fortführen, Admin-Reset per Importdatei, nächstes Spiel, curl; keine JS-Fehler.')
+                print('PASS: Participant-Ländercodes, Prag-Profil, Counter +/−, Warnung bei 4, Critical bei 5/6, parallele Counter in zwei Browsern, Seitenwechsel, bestätigter/abgebrochener/veralteter Periodendialog, Periodenhistorie und echter Neustart in Periode 2; Prag-Datei (6 Referees, 14 Matches mit je 3 Officials), Referee-Anlage/Bearbeitung, Officials-Auswahl, Export/Reimport vollständig; Event-Neuanlage, Dateiimport mit Preview/Kollision/Abbruch, Event-Wechsel, Config-Entwurf verworfen, Isolation; Paarungskorrektur, parallele Scores, Doppelklick, Undo, Pause, Offline/Reconnect, Reload, Ergebnisbestätigung, Spiel wieder öffnen, beendetes Spiel erneut auswählen/fortführen, Admin-Reset per Importdatei und per Zurücksetzen-Button, nächstes Spiel, curl; keine JS-Fehler.')
         finally:
             if process and process.poll() is None:
                 process.terminate(); process.wait(timeout=10)

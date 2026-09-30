@@ -277,6 +277,59 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(self.snapshot()['selection_token'],before['selection_token'])
         self.assertEqual(self.snapshot()['matches'][0]['status'],'ready')
 
+    def reset(self, event_id='prague-2026'):
+        return self.post('reset', event_id=event_id)
+
+    def test_import_keeps_file_and_reset_restores_it(self):
+        event_id = self.imported(); self.select(event_id)
+        sample = State.model_validate_json(SAMPLE)
+        self.assertEqual(load(self.directory/'imports'/f'{event_id}.json'),sample)
+        self.assertTrue(self.catalog()['items'][0]['reset_available'])
+        self.prepare(); self.action('start'); self.action('score'); self.action('finish')
+        self.action('select',match_id='match-010')
+        self.action('prepare',match_id='match-010',participant_1='bsc-praha',participant_2='kairat-almaty',side_l='bsc-praha',side_r='kairat-almaty')
+        self.action('unprepare',match_id='match-010')
+        self.configure('participants',dict(id='bsc-praha',name='Testname'))
+        before = self.snapshot()
+        response = self.reset(event_id)
+        self.assertEqual(response.status_code,200,response.text)
+        after = self.snapshot()
+        restored = State.model_validate({k:v for k,v in after.items() if k in State.model_fields})
+        self.assertEqual(restored.model_copy(update=dict(revision=0)),sample.model_copy(update=dict(events=[])))
+        self.assertEqual(self.client.get('/api/v1/events').json(),[])
+        self.assertGreater(after['revision'],before['revision'])
+        self.assertNotEqual(after['selection_token'],before['selection_token'])
+        # Die gespeicherte Importdatei bleibt unverändert und steht nach einem Neustart erneut zur Verfügung.
+        self.assertEqual(load(self.directory/'imports'/f'{event_id}.json'),sample)
+        self.prepare(); self.action('start'); self.action('finish')
+        self.client.__exit__(None,None,None); self.start()
+        self.assertTrue(self.catalog()['items'][0]['reset_available'])
+        self.assertEqual(self.reset(event_id).status_code,200)
+        self.assertTrue(all(m['status'] == 'scheduled' for m in self.snapshot()['matches']))
+
+    def test_reset_needs_stored_import_and_no_prepared_match(self):
+        created = self.create(); event_id = self.imported(); other = self.imported(as_new=True)
+        items = {item['id']:item for item in self.catalog()['items']}
+        self.assertEqual((items[created]['reset_available'],items[event_id]['reset_available'],items[other]['reset_available']),(False,True,True))
+        self.assertTrue((self.directory/'imports'/f'{other}.json').is_file())
+        self.select(event_id); self.prepare()
+        before = self.snapshot()
+        for target in (created, event_id, 'unknown'):
+            self.assertEqual(self.reset(target).status_code,409,target)
+        self.assertEqual(self.snapshot(),before)
+        # Eine andere, nicht aktive Veranstaltung lässt sich trotzdem zurücksetzen.
+        self.assertEqual(self.reset(other).status_code,200)
+        self.assertEqual(self.snapshot()['selection_token'],before['selection_token'])
+
+    def test_replace_makes_the_new_file_the_reset_basis(self):
+        event_id = self.imported(); self.select(event_id)
+        changed = json.loads(SAMPLE); changed['participants'][0]['name'] = 'Neu importiert'
+        text = json.dumps(changed)
+        self.assertEqual(self.replace(text=text).status_code,200)
+        self.configure('participants',dict(id=changed['participants'][0]['id'],name='Testname'))
+        self.assertEqual(self.reset(event_id).status_code,200)
+        self.assertEqual(self.snapshot()['participants'][0]['name'],'Neu importiert')
+
     def test_failed_import_keeps_catalogue_and_active_event(self):
         self.select(self.create())
         before = self.snapshot(); preview = self.preview()

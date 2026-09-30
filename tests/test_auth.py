@@ -212,6 +212,9 @@ class AuthTest(unittest.TestCase):
                                           json_text=raw,event_id=imported,preview_token=preview['preview_token']),headers=self.headers())
                 self.assertEqual(response.status_code,403 if role=='operator' else 200,response.text)
                 self.assertEqual(self.client.get('/api/v1/tournament').json()['matches'][0]['status'],'finished' if role=='operator' else 'scheduled')
+                state=self.client.get('/api/v1/tournament').json()
+                response=self.client.post('/api/v1/event-catalog/reset',json=dict(request_id=str(uuid4()),catalog_session=state['stream_id'],event_id=imported),headers=self.headers())
+                self.assertEqual(response.status_code,403 if role=='operator' else 200,response.text)
                 if role=='operator':
                     for path in ('/users','/api/auth/users','/docs','/openapi.json','/static/users.html'):
                         self.assertEqual(self.client.get(path).status_code,403,path)

@@ -209,12 +209,12 @@ Internet.“ Die Benutzerseite markiert betroffene Accounts zusätzlich mit
 | Events anlegen/auswählen, Namen/Daten und Sportprofil ändern | ja | ja |
 | Participants, Referees und Matches anlegen/bearbeiten, Import/Export | ja | ja |
 | Paarung, L/R, Score, Counter, Perioden, Pause/Resume, Finish, Reopen | ja | ja |
-| Veranstaltung durch Importdatei ersetzen (Reset nach Tests) | nein | ja |
+| Veranstaltung zurücksetzen oder durch Importdatei ersetzen | nein | ja |
 | Benutzer-/Passwortverwaltung und Sicherheitsparameter | nein | ja |
 | `/docs`, `/redoc`, `/openapi.json` | nein | ja |
 
 **operator = fachliche Vollberechtigung. admin = fachliche Vollberechtigung plus
-Sicherheits-/Benutzerverwaltung und Ersetzen einer Veranstaltung (Reset nach Tests).** Die bestehenden Fachregeln gelten für beide:
+Sicherheits-/Benutzerverwaltung sowie Zurücksetzen/Ersetzen einer Veranstaltung.** Die bestehenden Fachregeln gelten für beide:
 Konfiguration bleibt während vorbereiteter/laufender Spiele gesperrt, Ergebnisse
 und Counter bleiben an Teilnehmer gebunden. Sicherheitsparameter werden weiterhin
 in der lokalen Server-Config gepflegt; es gibt dafür keine neue Webmaske.
@@ -457,18 +457,34 @@ zusätzlichen ID. Eine Kollision, die erst nach der Vorschau entsteht, wird eben
 abgewiesen und erfordert diese ausdrückliche Entscheidung. Kein Merge, kein Update
 bestehender Veranstaltungen, kein Löschen.
 
-**Reset nach Tests (nur Admin):** Bei einer Kollision zeigt die Vorschau dem Admin
-zusätzlich **Bestehende Veranstaltung ersetzen**. Nach einem Bestätigungsdialog wird
-die Veranstaltung vollständig durch die geprüfte Datei ersetzt: Spielstände, Status,
-Paarungen (auch in K.-o.-Spiele eingetragene Test-Paarungen), Konfiguration und
-Ereignisprotokoll entsprechen danach exakt der Datei. Typischer Ablauf: vor den Tests
-die Originaldatei (z. B. `imports/prague-2026.json`) oder einen Export bereithalten,
-nach den Tests genau diese Datei zum Ersetzen auswählen. Änderungen unter `/config`
-seit dieser Datei gehen dabei verloren; bei Bedarf vorher exportieren. Das Ersetzen
-der aktiven Veranstaltung ist gesperrt, solange ein Spiel `ready`, `live` oder
-`paused` ist. Die Revision zählt monoton weiter und die Auswahlkennung wird erneuert,
-damit offene Aktionen alter Browseranzeigen abgewiesen werden. Operatoren sehen den
-Button nicht und erhalten vom Endpunkt `403 forbidden`.
+### Zurücksetzen nach Tests (nur Admin)
+
+Jeder JSON-Import speichert zusätzlich eine validierte Kopie der importierten Datei
+unter `imports/<event-id>.json` im Datenverzeichnis. Auch der Installer legt diese
+Kopie für die Prag-Seed-Datei an. Die Kopie bleibt bei allen Bedienaktionen
+unverändert und dient ausschließlich als Grundlage für das Zurücksetzen.
+
+- **Zurücksetzen:** In der Liste unter **Veranstaltungen** hat jede importierte
+  Veranstaltung für den Admin den Button **Zurücksetzen**. Nach einem
+  Bestätigungsdialog wird die Veranstaltung aus der gespeicherten Kopie neu
+  eingelesen, ohne erneute Dateiauswahl.
+- **Bestehende Veranstaltung ersetzen:** Bei einer ID-Kollision in der Import-Vorschau
+  kann der Admin die Veranstaltung durch eine andere Datei ersetzen. Diese Datei wird
+  dabei zugleich die neue Grundlage für **Zurücksetzen**.
+
+In beiden Fällen entsprechen Spielstände, Status, Paarungen (auch in K.-o.-Spiele
+eingetragene Test-Paarungen), Konfiguration und Ereignisprotokoll danach exakt der
+Datei. Änderungen unter `/config` seit dieser Datei gehen verloren; bei Bedarf vorher
+exportieren. Für die aktive Veranstaltung ist beides gesperrt, solange ein Spiel
+`ready`, `live` oder `paused` ist. Die Revision zählt monoton weiter und die
+Auswahlkennung wird erneuert, damit offene Aktionen alter Browseranzeigen abgewiesen
+werden. Operatoren sehen beide Buttons nicht und erhalten von den Endpunkten
+`403 forbidden`.
+
+Manuell angelegte Veranstaltungen und Veranstaltungen, die vor Einführung dieser
+Funktion importiert wurden, haben noch keine gespeicherte Kopie; die Liste zeigt dann
+„Zurücksetzen erst nach einem JSON-Import dieser Veranstaltung möglich.“ Einmaliges
+**Bestehende Veranstaltung ersetzen** mit der Originaldatei legt die Kopie an.
 
 **JSON exportieren** lädt genau den vollständigen State einer Veranstaltung als
 `<event-id>.json`, inklusive Ländercodes, Sportprofil, Perioden und Counterhistorie,
@@ -517,7 +533,7 @@ importieren. Fehlende aktive Event-Datei oder beschädigte Dateien führen zum
 Startabbruch statt zu einer stillen Rücksetzung.
 
 Für ein vollständiges Backup bei beendetem Server das Datenverzeichnis inklusive
-`events/` und `active-event.json` kopieren. Lock-Dateien sind keine Nutzdaten.
+`events/`, `imports/` und `active-event.json` kopieren. Lock-Dateien sind keine Nutzdaten.
 Ein einzelner JSON-Export ist eine portable Veranstaltungsdatei für den Import auf
 einer anderen Instanz. Bei laufendem Server sind separate Exporte konsistent je
 Veranstaltung; sie sind kein zeitgleicher Gesamtsnapshot aller Events.
@@ -776,8 +792,9 @@ Die atomare Ersetzung schützt vor halben JSON-Dateien bei Prozessabbruch auf
 Stromverlust. Die Event-Dateien behalten Schema-Version 1; die oben beschriebene
 Migration verändert ihren fachlichen State nicht. Unbekannte Schema-Versionen
 werden abgewiesen. Auch der Auswahlzeiger wird validiert und mit demselben
-Temp-/Flush-/fsync-/Replace-Verfahren gespeichert. Anlegen/Importieren speichern
-nur die neue Event-Datei; Auswählen schreibt nur den Auswahlzeiger.
+Temp-/Flush-/fsync-/Replace-Verfahren gespeichert. Anlegen speichert nur die neue
+Event-Datei, Importieren zusätzlich die Kopie unter `imports/`; Auswählen schreibt nur
+den Auswahlzeiger.
 
 Die Ereignisliste protokolliert insbesondere `match_started`, `score`, `pause`,
 `resume`, `side_switch`, `match_finished`, `match_reopened`, `counter`, `period_changed`,
@@ -1054,13 +1071,14 @@ die UI die Bedienung; erkannter Browser-Offline-Status sperrt sofort.
 
 | Methode / Pfad | Bedeutung |
 |---|---|
-| `GET /api/v1/event-catalog` | `items` mit IDs, Veranstaltungsdaten und Anzahlen; aktive ID und Auswahlkennung |
+| `GET /api/v1/event-catalog` | `items` mit IDs, Veranstaltungsdaten, Anzahlen und `reset_available`; aktive ID und Auswahlkennung |
 | `GET /api/v1/event-catalog/active` | `active_event_id` und `selection_token` |
 | `POST /api/v1/event-catalog/create` | neue Veranstaltung; `event` mit Veranstaltungsdaten |
 | `POST /api/v1/event-catalog/select` | auswählen; Ziel-`event_id` und bisheriger `selection_token` |
 | `POST /api/v1/event-catalog/import/preview` | `json_text` und optionale `event_id`; vollständig validierte Vorschau, `collision`, `preview_token` |
 | `POST /api/v1/event-catalog/import` | bestätigter Import mit `json_text`, Vorschau-`event_id`, `preview_token`, `as_new` (Default false) |
 | `POST /api/v1/event-catalog/replace` | nur Admin: vorhandene Veranstaltung durch geprüfte Datei ersetzen; `json_text`, `event_id`, `preview_token` aus der Vorschau |
+| `POST /api/v1/event-catalog/reset` | nur Admin: Veranstaltung `event_id` aus der gespeicherten Importdatei neu einlesen |
 | `GET /api/v1/event-catalog/{event_id}/export` | Download einer einzelnen portablen State-JSON |
 
 `create`, `select` und bestätigter `import` benötigen außerdem `request_id` und

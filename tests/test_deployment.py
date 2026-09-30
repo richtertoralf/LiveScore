@@ -211,12 +211,15 @@ class SeedTest(unittest.TestCase):
                 shutil.rmtree(self.data)
         self.data.mkdir(); (self.data/'tournament.json.lock').touch()
         self.assertTrue(seed_if_empty(self.config,self.seed))
+        # Der Seed bleibt als Importdatei für „Zurücksetzen“ erhalten.
+        self.assertEqual(load(self.data/'imports/prague-2026.json'),load(self.seed))
         self.assertFalse(seed_if_empty(self.config,self.seed))
 
     def test_seed_failure_cleans_its_partial_write_and_lock_excludes_server(self):
         with patch('livescore.bootstrap.save_selection',side_effect=OSError('disk full')):
             with self.assertRaises(OSError): seed_if_empty(self.config,self.seed)
         self.assertFalse((self.data/'events/prague-2026.json').exists())
+        self.assertFalse((self.data/'imports/prague-2026.json').exists())
         lease=FileLease(self.data/'active-event.json');lease.acquire()
         try:
             with self.assertRaises(RuntimeError): seed_if_empty(self.config,self.seed)

@@ -1,4 +1,4 @@
-# LiveScore 0.1.1
+# LiveScore 0.1.2
 
 Lokale Webanwendung zur einfachen Erfassung von Live-Spielständen bei Turnieren.
 Zwei Parteien treten gegeneinander an: Mannschaften, Einzelpersonen oder andere
@@ -9,14 +9,14 @@ vollständige Turnierverwaltung**.
 → Pause/Seitenwechsel → Ergebnis bestätigen → nächstes Spiel.**
 
 Mehrere Veranstaltungen können lokal vorbereitet, importiert und gespeichert werden.
-Genau eine davon ist für alle Bediener aktiv. Mit **LiveScore 0.1.1** sind Veranstaltungsdaten, Play Areas, Teilnehmer und Spielplan
+Genau eine davon ist für alle Bediener aktiv. Mit **LiveScore 0.1.2** sind Veranstaltungsdaten, Play Areas, Teilnehmer und Spielplan
 manuell im Browser erfassbar und bearbeitbar. Zwei oder mehr Bediener
 sehen denselben serverseitigen Zustand automatisch per WebSocket. Die externe
 HTTP-API liefert den aktuellen Spielstand bereits für links und rechts aufbereitet.
 Der Betrieb benötigt kein Internet, keine Datenbank und keinen externen Dienst.
 
 Die zentrale Versionsnummer steht in `VERSION`. In der installierten Python-Umgebung
-zeigt `python -m livescore --version` die Ausgabe `LiveScore 0.1.1`; der Befehl
+zeigt `python -m livescore --version` die Ausgabe `LiveScore 0.1.2`; der Befehl
 startet keinen Server und verändert keine Konfiguration oder Veranstaltungsdaten.
 
 ## Installation und Start
@@ -167,8 +167,8 @@ bekannte Standardbegriffe wie „Halbzeit“, „Tore“ und die Prag-Warntexte 
 bei der Anzeige übersetzt. Technische API-Feldnamen bleiben unverändert.
 
 Auf `/`, `/events`, `/config`, `/users` und `/login` zeigt ein unauffälliger Footer
-**LiveScore v0.1.1**. Die öffentliche `GET /api/version` liefert dafür
-`{"version":"0.1.1"}` aus derselben `VERSION`-Datei wie Python und CLI.
+**LiveScore v0.1.2**. Die öffentliche `GET /api/version` liefert dafür
+`{"version":"0.1.2"}` aus derselben `VERSION`-Datei wie Python und CLI.
 Die Anzeige bleibt in allen drei Sprachen gleich.
 
 Bei aktiviertem Schutz führt `/` zunächst zu **/login**. Initial credentials:

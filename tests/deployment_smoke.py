@@ -44,7 +44,7 @@ def run(remote_upgrade=False):
             proc=subprocess.Popen([str(cli)],cwd=ROOT,env=environment,stdout=log,stderr=log)
             for _ in range(100):
                 try:
-                    if httpx.get(url+'/api/version').json()=={'version':'0.1.1'}:return proc
+                    if httpx.get(url+'/api/version').json()=={'version':'0.1.2'}:return proc
                 except (httpx.HTTPError,ValueError):pass
                 if proc.poll() is not None:raise RuntimeError('Installed server failed; see deployment-smoke.log')
                 time.sleep(.1)
@@ -56,8 +56,8 @@ def run(remote_upgrade=False):
             return {'X-CSRF-Token':client.get('/api/auth/session').json()['csrf_token']}
         try:
             command(ROOT/'install.sh','--staging-root',root)
-            assert subprocess.check_output([cli,'--version'],text=True)=='LiveScore 0.1.1\n'
-            assert subprocess.check_output([runtime/'.venv/bin/python','-m','livescore','--version'],cwd=runtime,text=True)=='LiveScore 0.1.1\n'
+            assert subprocess.check_output([cli,'--version'],text=True)=='LiveScore 0.1.2\n'
+            assert subprocess.check_output([runtime/'.venv/bin/python','-m','livescore','--version'],cwd=runtime,text=True)=='LiveScore 0.1.2\n'
             config.write_text(config.read_text().replace('0.0.0.0','127.0.0.1').replace('8730',str(port)))
             process=start()
             with httpx.Client(base_url=url) as client:

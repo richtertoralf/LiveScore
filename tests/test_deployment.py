@@ -64,9 +64,9 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(load(config.data_dir / 'events/prague-2026.json'), expected)
         self.assertEqual((len(expected.matches), len(expected.participants), len(expected.referees)), (14,6,6))
         result = subprocess.run([self.deployment.cli,'--version'], capture_output=True,text=True,check=True)
-        self.assertEqual(result.stdout, 'LiveScore 0.1.1\n')
+        self.assertEqual(result.stdout, 'LiveScore 0.1.2\n')
         with TestClient(create_app(data_dir=config.data_dir,auth_config=config.auth)) as client:
-            self.assertEqual(client.get('/api/version').json(), {'version':'0.1.1'})
+            self.assertEqual(client.get('/api/version').json(), {'version':'0.1.2'})
             self.assertEqual(client.get('/api/v1/live').status_code,200)
             catalog = client.app.state.service
             self.assertEqual(catalog.selection.active_event_id,'prague-2026')

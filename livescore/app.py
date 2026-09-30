@@ -13,7 +13,7 @@ from pydantic import Field, ValidationError
 
 from . import __version__
 from .config import ROOT
-from .catalog import Catalog, CreateEvent, SelectEvent, ImportPreview, ImportEvent
+from .catalog import Catalog, CreateEvent, SelectEvent, ImportPreview, ImportEvent, ReplaceEvent
 from .models import Count, ID, Model
 from .service import Conflict, live_view
 from .storage import FileLease
@@ -166,6 +166,10 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     async def import_event(command: ImportEvent):
         return await app.state.service.catalog_apply("import", command)
 
+    @app.post("/api/v1/event-catalog/replace")
+    async def replace_event(command: ReplaceEvent):
+        return await app.state.service.catalog_apply("replace", command)
+
     @app.get("/api/v1/event-catalog/{event_id}/export")
     async def export_event(event_id: ID):
         state = app.state.service.states.get(event_id)
@@ -215,7 +219,7 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     async def intermission(command: Intermission):
         return await app.state.service.apply("intermission", command)
 
-    for operation in ("select", "unprepare", "start", "pause", "resume", "switch-sides", "undo", "finish"):
+    for operation in ("select", "unprepare", "start", "pause", "resume", "switch-sides", "undo", "finish", "reopen"):
         add_action(operation)
 
     @app.websocket("/api/v1/ws")

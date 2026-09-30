@@ -135,6 +135,59 @@ class APITest(unittest.TestCase):
         event_types = {e['type'] for e in self.client.get('/api/v1/events').json()}
         self.assertTrue({'match_started','score','pause','resume','match_finished','undo'} <= event_types)
 
+    def test_reopen_after_accidental_finish_keeps_scores_sides_and_undo(self):
+        self.start(); self.score('L'); self.score('L'); self.score('R')
+        self.action('switch-sides'); self.action('finish')
+        self.assertFalse(self.state()['can_undo'])
+        state = self.action('reopen')
+        self.assertEqual(state['live']['status'],'paused')
+        self.assertEqual(state['matches'][0]['scores'],{'a':2,'b':1})
+        self.assertEqual((state['live']['left']['id'],state['live']['left']['score']),('b',1))
+        self.assertEqual((state['live']['right']['id'],state['live']['right']['score']),('a',2))
+        self.assertTrue(state['can_undo'])
+        # Nach einem Neustart bleibt der wieder geöffnete Zustand erhalten.
+        self.client.__exit__(None,None,None)
+        self.app = create_app(auth_config=AuthConfig(enabled=False), data_file=self.legacy_path); self.client = TestClient(self.app).__enter__()
+        self.assertEqual(self.client.get('/api/v1/live').json()['status'],'paused')
+        self.action('undo')
+        self.assertEqual(self.state()['matches'][0]['scores'],{'a':2,'b':0})
+        self.action('resume'); self.score('L')  # b steht nach dem Seitenwechsel links.
+        self.action('finish')
+        self.assertEqual(self.state()['matches'][0]['scores'],{'a':2,'b':1})
+        event_types = [e['type'] for e in self.client.get('/api/v1/events').json()]
+        self.assertEqual(event_types.count('match_finished'),2)
+        self.assertIn('match_reopened',event_types)
+
+    def test_reopen_only_for_selected_finished_match_and_after_selecting_it_again(self):
+        before = self.state()
+        self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
+        self.assertEqual(self.state(),before)
+        self.ready()
+        self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
+        self.action('start')
+        self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
+        self.action('pause')
+        self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
+        self.action('finish')
+        stale = self.state()['revision']
+        self.action('select',match_id='m2')
+        before = self.state()
+        self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
+        response = self.client.post('/api/v1/live/reopen',json=dict(request_id=str(uuid4()),expected_revision=stale,**self.context(),match_id='m1'))
+        self.assertEqual(response.status_code,409)
+        self.assertEqual(self.state(),before)
+        self.assertEqual(before['matches'][0]['status'],'finished')
+        # Ein beendetes Spiel darf erneut ausgewählt und dann wieder geöffnet werden.
+        state = self.action('select',match_id='m1')
+        self.assertEqual((state['live']['status'],state['live']['match_id']),('finished','m1'))
+        self.assertEqual(self.action('reopen')['live']['status'],'paused')
+        self.assertEqual(self.request('live/select',match_id='m2').status_code,409)
+        self.action('finish')
+        self.action('select',match_id='m2'); self.action('prepare',match_id='m2',participant_1='a',participant_2='c',side_l='a',side_r='c')
+        self.assertEqual(self.request('live/select',match_id='m1').status_code,409)
+        self.action('start',match_id='m2')
+        self.assertEqual(self.request('live/select',match_id='m1').status_code,409)
+
     def test_negative_and_zero_and_boolean_scores_rejected(self):
         self.start()
         for delta, code in ((-1,409),(0,422),(2,422),(True,422),('1',422)):

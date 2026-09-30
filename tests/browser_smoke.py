@@ -305,6 +305,15 @@ async def run(executable):
                 await expect(page_b.locator('.status')).to_have_text('LIVE')
                 await action(page_a,'finish-dialog'); await page_a.locator('#finish-confirm').click()
                 await expect(page_b.locator('.status')).to_have_text('BEENDET')
+                # Versehentliches Spielende: Abbrechen ändert nichts, Bestätigen öffnet in PAUSE mit gleichem Stand.
+                await action(page_b,'reopen-dialog'); await page_b.locator('#reopen-cancel').click()
+                await expect(page_a.locator('.status')).to_have_text('BEENDET')
+                await action(page_b,'reopen-dialog'); await page_b.locator('#reopen-confirm').click()
+                await expect(page_a.locator('.status')).to_have_text('PAUSE')
+                await scores(3,4)
+                await action(page_a,'resume'); await expect(page_b.locator('.status')).to_have_text('LIVE')
+                await action(page_a,'finish-dialog'); await page_a.locator('#finish-confirm').click()
+                await expect(page_b.locator('.status')).to_have_text('BEENDET')
                 await page_b.locator('[data-action=select]').click()
                 await expect(page_a.locator('.status')).to_have_text('NÄCHSTES SPIEL')
                 await page_a.locator('#pair-1').select_option(label='BSC Praha')
@@ -312,15 +321,38 @@ async def run(executable):
                 await action(page_a,'prepare'); await action(page_b,'start'); await scores(0,0)
                 await action(page_a,'finish-dialog'); await page_a.locator('#finish-confirm').click()
                 await expect(page_b.locator('.status')).to_have_text('BEENDET')
+                # Operator wählt ein früher beendetes Spiel erneut aus und führt es weiter.
+                await action(page_b,'toggle-finished')
+                await expect(page_b.locator('.match-item', has_text='BEENDET')).to_have_count(1)
+                await page_b.locator('.match-item', has_text='BEENDET').click()
+                await expect(page_a.locator('.status')).to_have_text('BEENDET'); await scores(3,4)
+                await action(page_a,'reopen-dialog'); await page_a.locator('#reopen-confirm').click()
+                await expect(page_b.locator('.status')).to_have_text('PAUSE')
+                await action(page_b,'undo'); await scores(3,3)
+                await action(page_b,'finish-dialog'); await page_b.locator('#finish-confirm').click()
+                await expect(page_a.locator('.status')).to_have_text('BEENDET')
                 await choose(event_b)
                 await expect(page_b.locator('#score-L')).to_have_text('1')
                 await assert_officials(page_b)
                 await expect(page_b.locator('#period-label')).to_contain_text('2. Halbzeit')
                 await expect(page_b.locator('#counter-L-team_fouls .counter-value')).to_have_text('2')
+                # Admin-Reset nach Tests: aktive Veranstaltung durch die Importdatei ersetzen.
+                await page_a.goto(url+'/events')
+                await page_a.locator('#json-import summary').click()
+                await page_a.locator('#import-file').set_input_files(ROOT/'imports/prague-2026.json')
+                await page_a.locator('[data-action="replace-import"]').click(); await page_a.locator('#replace-cancel').click()
+                await expect(page_b.locator('#score-L')).to_have_text('1')
+                await page_a.locator('[data-action="replace-import"]').click(); await page_a.locator('#replace-confirm').click()
+                await expect(page_a.locator('#message')).to_have_text('Veranstaltung ersetzt. Alle Daten entsprechen jetzt der Importdatei.')
+                await expect(page_b.locator('.match-item')).to_have_count(14)
+                await expect(page_b.locator('[data-action="toggle-finished"]')).to_have_count(0)
+                reset = await (await page_a.request.get(url+'/api/v1/tournament')).json()
+                assert all(m['status'] == 'scheduled' for m in reset['matches']) and reset['matches'][9]['participant_1'] is None
+                assert (await (await page_a.request.get(url+'/api/v1/live')).json())['status'] == 'idle'
                 assert len((await (await page_a.request.get(url+'/api/v1/event-catalog')).json())['items']) == 3
                 assert not errors, errors
                 await browser.close()
-                print('PASS: Participant-Ländercodes, Prag-Profil, Counter +/−, Warnung bei 4, Critical bei 5/6, parallele Counter in zwei Browsern, Seitenwechsel, bestätigter/abgebrochener/veralteter Periodendialog, Periodenhistorie und echter Neustart in Periode 2; Prag-Datei (6 Referees, 14 Matches mit je 3 Officials), Referee-Anlage/Bearbeitung, Officials-Auswahl, Export/Reimport vollständig; Event-Neuanlage, Dateiimport mit Preview/Kollision/Abbruch, Event-Wechsel, Config-Entwurf verworfen, Isolation; Paarungskorrektur, parallele Scores, Doppelklick, Undo, Pause, Offline/Reconnect, Reload, Ergebnisbestätigung, nächstes Spiel, curl; keine JS-Fehler.')
+                print('PASS: Participant-Ländercodes, Prag-Profil, Counter +/−, Warnung bei 4, Critical bei 5/6, parallele Counter in zwei Browsern, Seitenwechsel, bestätigter/abgebrochener/veralteter Periodendialog, Periodenhistorie und echter Neustart in Periode 2; Prag-Datei (6 Referees, 14 Matches mit je 3 Officials), Referee-Anlage/Bearbeitung, Officials-Auswahl, Export/Reimport vollständig; Event-Neuanlage, Dateiimport mit Preview/Kollision/Abbruch, Event-Wechsel, Config-Entwurf verworfen, Isolation; Paarungskorrektur, parallele Scores, Doppelklick, Undo, Pause, Offline/Reconnect, Reload, Ergebnisbestätigung, Spiel wieder öffnen, beendetes Spiel erneut auswählen/fortführen, Admin-Reset per Importdatei, nächstes Spiel, curl; keine JS-Fehler.')
         finally:
             if process and process.poll() is None:
                 process.terminate(); process.wait(timeout=10)

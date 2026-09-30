@@ -43,6 +43,11 @@ class ImportEvent(ImportPreview, CatalogCommand):
     as_new: bool = Field(default=False, strict=True)
 
 
+class ReplaceEvent(ImportPreview, CatalogCommand):
+    event_id: ID
+    preview_token: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
 def event_id_for(state):
     event = state.event
     name = event.name if event else 'Veranstaltung'
@@ -180,6 +185,28 @@ class Catalog(Service):
                 self.selection = selection
                 self.path = self.event_path(command.event_id)
                 self.state = self.states[command.event_id]
+            elif operation == 'replace':
+                # Admin-Reset: vorhandene Veranstaltung vollständig durch die geprüfte Importdatei ersetzen.
+                state, desired = self.validate_import(command)
+                if not hmac.compare_digest(command.preview_token, self.preview_token(state, desired)):
+                    raise Conflict('Import-Vorschau ist nicht mehr gültig. Datei erneut prüfen.')
+                if desired not in self.states:
+                    raise Conflict('Veranstaltung nicht gefunden.')
+                active = desired == self.selection.active_event_id
+                match = current_match(self.state) if active else None
+                if match and match.status in ('ready', 'live', 'paused'):
+                    raise Conflict('Aktuell ist ein Spiel vorbereitet oder aktiv. Beende das Spiel bzw. setze die Vorbereitung zurück, bevor du die Veranstaltung ersetzt.')
+                # Revision bleibt monoton; eine neue Auswahlkennung macht offene Aktionen alter Anzeigen ungültig.
+                state.revision = max(state.revision, self.states[desired].revision) + 1
+                cancelled = False
+                if active:
+                    selection = Selection(active_event_id=desired)
+                    cancelled = await persist(save_selection, self.selection_path, selection)
+                    self.selection = selection
+                cancelled = await persist(storage.save, self.event_path(desired), state) or cancelled
+                self.states[desired] = state
+                if active:
+                    self.state = state
             else:
                 if operation == 'create':
                     state = State(event=command.event)

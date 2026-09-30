@@ -70,9 +70,9 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.text)
         return response.json()['created_event_id']
 
-    def action(self, action, **fields):
+    def action(self, action, match_id='match-001', **fields):
         state = self.snapshot()
-        payload = dict(request_id=str(uuid4()), **context(state), match_id='match-001', **fields)
+        payload = dict(request_id=str(uuid4()), **context(state), match_id=match_id, **fields)
         if action == 'score':
             match = state['matches'][0]
             payload.update(control_revision=match['control_revision'],participant_id=match['side_l'],side='L',delta=1)
@@ -230,6 +230,52 @@ class CatalogTest(unittest.TestCase):
             start.result(); switch.result()
         self.assertEqual(self.snapshot()['active_event_id'],a)
         self.assertEqual(self.snapshot()['live']['status'],'live')
+
+    def replace(self, event_id='prague-2026', text=SAMPLE, token=None):
+        preview = self.preview(text=text, event_id=event_id)
+        return self.post('replace', json_text=text, event_id=event_id, preview_token=token or preview['preview_token'])
+
+    def test_replace_resets_active_event_to_import_file(self):
+        event_id = self.imported(); self.select(event_id)
+        self.prepare(); self.action('start'); self.action('score'); self.action('finish')
+        # Ein Test eines K.-o.-Spiels trägt die Paarung dauerhaft in den Spielplan ein.
+        self.action('select',match_id='match-010')
+        self.action('prepare',match_id='match-010',participant_1='bsc-praha',participant_2='kairat-almaty',side_l='bsc-praha',side_r='kairat-almaty')
+        self.action('unprepare',match_id='match-010')
+        before = self.snapshot()
+        self.assertEqual(before['matches'][9]['participant_1'],'bsc-praha')
+        response = self.replace()
+        self.assertEqual(response.status_code,200,response.text)
+        after = self.snapshot()
+        sample = State.model_validate_json(SAMPLE)
+        self.assertEqual(after['matches'],[m.model_dump(mode='json') for m in sample.matches])
+        self.assertIsNone(after['active_match_id'])
+        self.assertEqual(self.client.get('/api/v1/events').json(),[])
+        self.assertEqual(self.client.get('/api/v1/live').json()['status'],'idle')
+        self.assertGreater(after['revision'],before['revision'])
+        self.assertNotEqual(after['selection_token'],before['selection_token'])
+        # Offene Aktionen einer alten Anzeige laufen ins Leere.
+        stale = self.client.post('/api/v1/live/select',json=dict(request_id=str(uuid4()),**context(before),
+                                 expected_revision=after['revision'],match_id='match-001'))
+        self.assertEqual(stale.status_code,409)
+        stored = load(self.directory/'events'/f'{event_id}.json')
+        self.assertEqual(stored.model_copy(update=dict(revision=0)),sample)
+        self.client.__exit__(None,None,None); self.start()
+        self.assertEqual(self.snapshot()['selection_token'],after['selection_token'])
+        self.assertEqual(self.snapshot()['matches'][9]['participant_1'],None)
+
+    def test_replace_is_blocked_during_match_and_needs_existing_event_and_valid_preview(self):
+        event_id = self.imported(); self.select(event_id); self.prepare()
+        before = self.snapshot()
+        self.assertEqual(self.replace().status_code,409)
+        self.assertEqual(self.replace(event_id='unknown').status_code,409)
+        self.assertEqual(self.replace(token='0'*64).status_code,409)
+        self.assertEqual(self.snapshot(),before)
+        # Eine nicht aktive Veranstaltung lässt sich ersetzen, ohne die Auswahl zu verändern.
+        other = self.imported(as_new=True)
+        self.assertEqual(self.replace(event_id=other).status_code,200)
+        self.assertEqual(self.snapshot()['selection_token'],before['selection_token'])
+        self.assertEqual(self.snapshot()['matches'][0]['status'],'ready')
 
     def test_failed_import_keeps_catalogue_and_active_event(self):
         self.select(self.create())

@@ -205,6 +205,13 @@ class AuthTest(unittest.TestCase):
                 self.assertEqual(exported.status_code,200)
                 self.assertEqual(exported.json()['event']['name'],'Corrected name')
                 self.assertEqual(exported.json()['matches'][0]['scores']['bsc-praha'],1)
+                # Nur der Admin darf eine Veranstaltung durch eine Importdatei ersetzen (Reset nach Tests).
+                preview=self.client.post('/api/v1/event-catalog/import/preview',json=dict(json_text=raw,event_id=imported),headers=self.headers()).json()
+                state=self.client.get('/api/v1/tournament').json()
+                response=self.client.post('/api/v1/event-catalog/replace',json=dict(request_id=str(uuid4()),catalog_session=state['stream_id'],
+                                          json_text=raw,event_id=imported,preview_token=preview['preview_token']),headers=self.headers())
+                self.assertEqual(response.status_code,403 if role=='operator' else 200,response.text)
+                self.assertEqual(self.client.get('/api/v1/tournament').json()['matches'][0]['status'],'finished' if role=='operator' else 'scheduled')
                 if role=='operator':
                     for path in ('/users','/api/auth/users','/docs','/openapi.json','/static/users.html'):
                         self.assertEqual(self.client.get(path).status_code,403,path)

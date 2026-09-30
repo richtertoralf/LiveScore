@@ -238,8 +238,9 @@ class Service:
             if match and match.status in ("ready", "live", "paused"):
                 raise Conflict("Aktuelles Spiel zuerst beenden oder Vorbereitung zurücknehmen.")
             selected = next((m for m in state.matches if m.id == command.match_id), None)
-            if selected is None or selected.status != "scheduled":
-                raise Conflict("Bitte ein geplantes Spiel auswählen.")
+            # Beendete Spiele dürfen erneut ausgewählt werden, um sie mit `reopen` fortzuführen.
+            if selected is None or selected.status not in ("scheduled", "finished"):
+                raise Conflict("Bitte ein geplantes oder beendetes Spiel auswählen.")
             state.active_match_id = selected.id
             return {"type": "match_selected", "match_id": selected.id}
         if match is None or command.match_id != match.id:
@@ -252,6 +253,7 @@ class Service:
             "pause": {"live"}, "resume": {"paused"},
             "switch-sides": {"ready", "live", "paused"},
             "undo": {"live", "paused"}, "finish": {"live", "paused"},
+            "reopen": {"finished"},
         }
         if match.status not in allowed[operation]:
             raise Conflict("Diese Aktion ist im aktuellen Spielzustand nicht erlaubt.")
@@ -333,6 +335,11 @@ class Service:
             match.status = "finished"
             match.intermission = False
             event["type"] = "match_finished"
+        elif operation == "reopen":
+            # Korrektur eines versehentlichen Spielendes: Score, Seiten und Abschnitt bleiben,
+            # das Spiel wird bewusst in PAUSE fortgesetzt.
+            match.status = "paused"
+            event["type"] = "match_reopened"
         if operation not in ("score", "counter"):
             match.control_revision += 1
         return event

@@ -208,12 +208,13 @@ Internet.“ Die Benutzerseite markiert betroffene Accounts zusätzlich mit
 | Alle fachlichen Veranstaltungs- und Live-Daten lesen/bearbeiten | ja | ja |
 | Events anlegen/auswählen, Namen/Daten und Sportprofil ändern | ja | ja |
 | Participants, Referees und Matches anlegen/bearbeiten, Import/Export | ja | ja |
-| Paarung, L/R, Score, Counter, Perioden, Pause/Resume, Finish | ja | ja |
+| Paarung, L/R, Score, Counter, Perioden, Pause/Resume, Finish, Reopen | ja | ja |
+| Veranstaltung durch Importdatei ersetzen (Reset nach Tests) | nein | ja |
 | Benutzer-/Passwortverwaltung und Sicherheitsparameter | nein | ja |
 | `/docs`, `/redoc`, `/openapi.json` | nein | ja |
 
 **operator = fachliche Vollberechtigung. admin = fachliche Vollberechtigung plus
-Sicherheits-/Benutzerverwaltung.** Die bestehenden Fachregeln gelten für beide:
+Sicherheits-/Benutzerverwaltung und Ersetzen einer Veranstaltung (Reset nach Tests).** Die bestehenden Fachregeln gelten für beide:
 Konfiguration bleibt während vorbereiteter/laufender Spiele gesperrt, Ergebnisse
 und Counter bleiben an Teilnehmer gebunden. Sicherheitsparameter werden weiterhin
 in der lokalen Server-Config gepflegt; es gibt dafür keine neue Webmaske.
@@ -450,11 +451,24 @@ Andernfalls wird die ID aus den Veranstaltungsdaten abgeleitet. Zulässig sind
 Buchstaben, Ziffern, Bindestrich und Unterstrich, maximal 80 Zeichen; das erste
 Zeichen muss alphanumerisch sein. Dateipfade werden nicht als IDs akzeptiert.
 
-Existiert die Import-ID bereits, wird **niemals überschrieben**. Möglich sind
+Existiert die Import-ID bereits, wird beim normalen Import **niemals überschrieben**. Möglich sind
 **Abbrechen** oder **Als neue Veranstaltung importieren** mit einer eindeutigen
 zusätzlichen ID. Eine Kollision, die erst nach der Vorschau entsteht, wird ebenfalls
 abgewiesen und erfordert diese ausdrückliche Entscheidung. Kein Merge, kein Update
 bestehender Veranstaltungen, kein Löschen.
+
+**Reset nach Tests (nur Admin):** Bei einer Kollision zeigt die Vorschau dem Admin
+zusätzlich **Bestehende Veranstaltung ersetzen**. Nach einem Bestätigungsdialog wird
+die Veranstaltung vollständig durch die geprüfte Datei ersetzt: Spielstände, Status,
+Paarungen (auch in K.-o.-Spiele eingetragene Test-Paarungen), Konfiguration und
+Ereignisprotokoll entsprechen danach exakt der Datei. Typischer Ablauf: vor den Tests
+die Originaldatei (z. B. `imports/prague-2026.json`) oder einen Export bereithalten,
+nach den Tests genau diese Datei zum Ersetzen auswählen. Änderungen unter `/config`
+seit dieser Datei gehen dabei verloren; bei Bedarf vorher exportieren. Das Ersetzen
+der aktiven Veranstaltung ist gesperrt, solange ein Spiel `ready`, `live` oder
+`paused` ist. Die Revision zählt monoton weiter und die Auswahlkennung wird erneuert,
+damit offene Aktionen alter Browseranzeigen abgewiesen werden. Operatoren sehen den
+Button nicht und erhalten vom Endpunkt `403 forbidden`.
 
 **JSON exportieren** lädt genau den vollständigen State einer Veranstaltung als
 `<event-id>.json`, inklusive Ländercodes, Sportprofil, Perioden und Counterhistorie,
@@ -534,8 +548,17 @@ Veranstaltung; sie sind kein zeitgleicher Gesamtsnapshot aller Events.
 9. **Spiel Ende** öffnet die Endstandprüfung. Erst **Ergebnis bestätigen** setzt
    das Spiel auf `finished`. Ändert ein anderer Bediener inzwischen den Zustand,
    wird die Bestätigung verworfen und der neue Stand muss erneut geprüft werden.
-10. Nächstes Spiel auswählen. Abgeschlossene Ergebnisse bleiben im Spielplan und
-    können nicht wieder geöffnet oder verändert werden.
+10. Wurde ein Spiel versehentlich beendet, öffnet **Spiel wieder öffnen** (mit
+    Bestätigungsdialog) es erneut. Das ist jedem angemeldeten Bediener möglich.
+    Ein früher beendetes Spiel lässt sich dafür unter **Beendete Spiele anzeigen**
+    (unterhalb der Spielauswahl) erneut auswählen, sofern gerade kein anderes Spiel
+    vorbereitet oder aktiv ist. Score, Seiten, Abschnitt und Counter
+    bleiben unverändert; das Spiel steht danach auf **PAUSE** und läuft erst mit
+    **Fortsetzen** wieder LIVE. Undo ist wieder verfügbar. Eine gesetzte
+    Halbzeitpause wurde durch das Spielende beendet und muss gegebenenfalls neu
+    gesetzt werden.
+11. Nächstes Spiel auswählen. Abgeschlossene Ergebnisse bleiben im Spielplan und
+    ändern sich nur nach ausdrücklichem **Spiel wieder öffnen**.
 
 Es gibt **ein global ausgewähltes Spiel**, auch wenn mehrere Play Areas hinterlegt
 sind. Mehrere Browser bedienen dieses gleiche Spiel. Vorbereiten (`ready`), laufende
@@ -725,10 +748,14 @@ Erlaubte Übergänge:
 scheduled → ready → live ⇄ paused
              ↓        ↘   ↙
           scheduled   finished
+finished → paused     (reopen; beendete Spiele lassen sich dafür erneut auswählen)
 ```
 
 `prepare` bestätigt/korrigiert eine Paarung und legt die Seiten fest;
 `unprepare` nimmt ausschließlich vor Spielbeginn die Vorbereitung zurück.
+`select` akzeptiert geplante und beendete Spiele, solange kein anderes Spiel
+`ready`, `live` oder `paused` ist. `reopen` führt das ausgewählte beendete Spiel von
+`finished` nach `paused` zurück.
 `idle` wird nur von der API verwendet, wenn kein Spiel ausgewählt ist.
 Unbekannte Paarungen können `scheduled` bleiben; `ready` benötigt eine gültige
 Paarung mit zwei unterschiedlichen Teilnehmern und Scores von null.
@@ -753,7 +780,7 @@ Temp-/Flush-/fsync-/Replace-Verfahren gespeichert. Anlegen/Importieren speichern
 nur die neue Event-Datei; Auswählen schreibt nur den Auswahlzeiger.
 
 Die Ereignisliste protokolliert insbesondere `match_started`, `score`, `pause`,
-`resume`, `side_switch`, `match_finished`, `counter`, `period_changed`,
+`resume`, `side_switch`, `match_finished`, `match_reopened`, `counter`, `period_changed`,
 `intermission_started`, `intermission_ended` und `undo` samt Spiel-/Teilnehmerbezug,
 Zeitstempel, Revision und Request-ID. Undo markiert das Score-Ereignis und verweist
 auf seine ID. Counter-Ereignisse enthalten zusätzlich `counter_id`, `period` und
@@ -851,7 +878,9 @@ Ohne ausgewähltes Spiel: `status: "idle"`, `period`, `period_info`, `stage`, `r
 `match_id`, `play_area`, `left` und `right` sind `null`. Beim ausgewählten, noch nicht vorbereiteten Spiel:
 `status: "scheduled"`, Match/Play Area sind vorhanden, `left` und `right` sind
 `null`. Ein bestätigtes Ergebnis bleibt als `finished` sichtbar, bis ein anderes
-Spiel ausgewählt wird. Fehlende Kurznamen erscheinen als leere Zeichenfolge.
+Spiel ausgewählt wird. Wird ein beendetes Spiel erneut ausgewählt, liefert die API
+dieses Spiel mit `finished` und seinem Endstand; nach **Spiel wieder öffnen** meldet
+sie `paused`. Fehlende Kurznamen erscheinen als leere Zeichenfolge.
 `officials` enthält die aufgelösten Referee-Objekte des aktuellen Matches, bereits
 ab `scheduled`. Ohne Match oder ohne Officials ist es `[]`. `/tournament` enthält
 zusätzlich die gesamte `referees`-Liste; dort und in `/matches` bleiben
@@ -966,7 +995,7 @@ keine Sport-, Turnier- oder Seitenwechsellogik. HTTP-Antworten werden mit
 | `POST /api/v1/config/participants` | Teilnehmer anlegen/über ID aktualisieren |
 | `POST /api/v1/config/referees` | Referee mit `id`, `name`, optional `country_code` anlegen/aktualisieren |
 | `POST /api/v1/config/matches` | geplantes Spiel anlegen/über ID aktualisieren |
-| `POST /api/v1/live/select` | geplantes Spiel auswählen |
+| `POST /api/v1/live/select` | geplantes oder beendetes Spiel auswählen |
 | `POST /api/v1/live/prepare` | Paarung bestätigen/korrigieren und L/R festlegen |
 | `POST /api/v1/live/unprepare` | Vorbereitung zurücknehmen |
 | `POST /api/v1/live/start` | vorbereitetes Spiel starten |
@@ -979,6 +1008,7 @@ keine Sport-, Turnier- oder Seitenwechsellogik. HTTP-Antworten werden mit
 | `POST /api/v1/live/switch-sides` | nur L/R tauschen (ready/live/paused) |
 | `POST /api/v1/live/undo` | letzte geeignete Score-Aktion zurücknehmen |
 | `POST /api/v1/live/finish` | Ergebnis bestätigen (live/paused → finished) |
+| `POST /api/v1/live/reopen` | ausgewähltes beendetes Spiel wieder öffnen (finished → paused) |
 | `WS /api/v1/ws` | initialer UI-Snapshot, weitere Snapshots, Heartbeat alle 5 Sekunden bei Leerlauf |
 
 Mutationen geben den aktuellen UI-Snapshot zurück. Allgemeine Spielaktionen
@@ -1030,6 +1060,7 @@ die UI die Bedienung; erkannter Browser-Offline-Status sperrt sofort.
 | `POST /api/v1/event-catalog/select` | auswählen; Ziel-`event_id` und bisheriger `selection_token` |
 | `POST /api/v1/event-catalog/import/preview` | `json_text` und optionale `event_id`; vollständig validierte Vorschau, `collision`, `preview_token` |
 | `POST /api/v1/event-catalog/import` | bestätigter Import mit `json_text`, Vorschau-`event_id`, `preview_token`, `as_new` (Default false) |
+| `POST /api/v1/event-catalog/replace` | nur Admin: vorhandene Veranstaltung durch geprüfte Datei ersetzen; `json_text`, `event_id`, `preview_token` aus der Vorschau |
 | `GET /api/v1/event-catalog/{event_id}/export` | Download einer einzelnen portablen State-JSON |
 
 `create`, `select` und bestätigter `import` benötigen außerdem `request_id` und

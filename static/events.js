@@ -1,5 +1,5 @@
 import { t, errorText } from './i18n.js';
-import { csrfHeaders } from './auth-client.js';
+import { csrfHeaders, isAdmin } from './auth-client.js';
 import { $, escape as e, Connection, message } from './common.js';
 let preview = null, uploadGeneration = 0;
 const app = new Connection(render);
@@ -15,7 +15,7 @@ function render(state) {
     return `<article class="panel ${active ? 'active-event' : ''}" data-event-id="${e(item.id)}"><h2>${e(item.event?.name || t('Noch nicht eingerichtet'))}${active ? ' · ' + t('AKTIV') : ''}</h2><p class="muted">${description(item.event)}</p><p>${item.matches} ${t("Spiele")} · ${item.participants} ${t("Teilnehmer")} · ${item.referees} ${t("Referees")} · ${item.play_areas} ${t("Play Areas")}</p><div class="event-buttons"><button data-action="select-event" data-id="${e(item.id)}" data-disabled="${active}" class="${active ? '' : 'primary'}">${active ? t('Ausgewählt') : t('Auswählen')}</button><a href="/api/v1/event-catalog/${encodeURIComponent(item.id)}/export" download>${t("JSON exportieren")}</a></div></article>`;
   }).join('') || `<p>${t("Noch keine Veranstaltungen gespeichert.")}</p>`;
   if (preview && preview.session !== state.stream_id) {
-    preview = null; $('#import-preview').hidden = true;
+    preview = null; $('#import-preview').hidden = true; $('#replace-dialog').close();
     message(t('Server wurde neu gestartet. Bitte Import-Vorschau erneut laden.'));
   }
 }
@@ -49,8 +49,10 @@ $('#import-file').addEventListener('change', async event => {
     const data = await response.json();
     if (generation !== uploadGeneration) return;
     if (!response.ok) { message(errorText(data.detail)); return; }
-    preview = {json_text,event_id:data.event_id,preview_token:data.preview_token,session:app.state.stream_id};
-    $('#import-preview').innerHTML = `<h2>${t("Diese Veranstaltung importieren?")}</h2><p><strong>${e(data.event.name)}</strong></p><p>${description(data.event)}</p><p>${data.participants} ${t("Teilnehmer")} · ${data.referees} ${t("Referees")} · ${data.play_areas} ${t("Play Areas")} · ${data.matches} ${t("Spiele")}</p><p>${data.collision ? t('Eine Veranstaltung mit dieser ID existiert bereits. Vorhandene Daten bleiben erhalten.') : t('Die Datei wird als eigene Veranstaltung gespeichert.')}</p><div class="stack"><button data-action="confirm-import" class="primary" data-as-new="${data.collision}">${data.collision ? t('Als neue Veranstaltung importieren') : t('Importieren')}</button><button data-action="cancel-import">${t("Abbrechen")}</button></div>`;
+    preview = {json_text,event_id:data.event_id,preview_token:data.preview_token,session:app.state.stream_id,name:data.event.name};
+    // Nur Admins dürfen eine vorhandene Veranstaltung ersetzen, z. B. um Testspiele vollständig zurückzusetzen.
+    const replace = data.collision && isAdmin() ? `<button data-action="replace-import" class="danger">${t('Bestehende Veranstaltung ersetzen')}</button>` : '';
+    $('#import-preview').innerHTML = `<h2>${t("Diese Veranstaltung importieren?")}</h2><p><strong>${e(data.event.name)}</strong></p><p>${description(data.event)}</p><p>${data.participants} ${t("Teilnehmer")} · ${data.referees} ${t("Referees")} · ${data.play_areas} ${t("Play Areas")} · ${data.matches} ${t("Spiele")}</p><p>${data.collision ? t('Eine Veranstaltung mit dieser ID existiert bereits. Vorhandene Daten bleiben erhalten.') : t('Die Datei wird als eigene Veranstaltung gespeichert.')}</p><div class="stack"><button data-action="confirm-import" class="primary" data-as-new="${data.collision}">${data.collision ? t('Als neue Veranstaltung importieren') : t('Importieren')}</button>${replace}<button data-action="cancel-import">${t("Abbrechen")}</button></div>`;
     $('#import-preview').hidden = false; app.controls();
   } catch (error) { if (generation === uploadGeneration) message(t('Datei konnte nicht geprüft werden. Verbindung und JSON-Datei prüfen.')); }
 });
@@ -61,8 +63,11 @@ $('#import-preview').addEventListener('click', async event => {
     preview = null; ++uploadGeneration; $('#import-preview').hidden = true; $('#import-file').value = ''; return;
   }
   if (!preview) return;
-  const {session, ...payload} = preview;
+  const {session, name, ...payload} = preview;
   if (session !== app.state.stream_id) { message(t('Bitte Import-Vorschau erneut laden.')); return; }
+  if (button.dataset.action === 'replace-import') {
+    $('#replace-name').textContent = name; $('#replace-dialog').showModal(); return;
+  }
   const result = await app.send('event-catalog/import',{...payload,as_new:button.dataset.asNew === 'true'});
   if (result) {
     preview = null; $('#import-preview').hidden = true; $('#import-file').value = '';
@@ -71,3 +76,14 @@ $('#import-preview').addEventListener('click', async event => {
     button.dataset.asNew = 'true'; button.textContent = t('Als neue Veranstaltung importieren');
   }
 });
+$('#replace-cancel').onclick = () => $('#replace-dialog').close();
+$('#replace-confirm').onclick = async () => {
+  $('#replace-dialog').close();
+  if (!preview) return;
+  const {session, name, ...payload} = preview;
+  if (session !== app.state.stream_id) { message(t('Bitte Import-Vorschau erneut laden.')); return; }
+  if (await app.send('event-catalog/replace',payload)) {
+    preview = null; $('#import-preview').hidden = true; $('#import-file').value = '';
+    message(t('Veranstaltung ersetzt. Alle Daten entsprechen jetzt der Importdatei.'));
+  }
+};

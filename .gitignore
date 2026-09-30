@@ -8,3 +8,4 @@ config/auth.yml
 *.lock
 *.tmp
 codex-session-*.md
+spielplan-prag-2026.xlsx

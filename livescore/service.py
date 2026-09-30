@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 import hashlib
 import json
+import re
 from uuid import uuid4
 
 from . import storage
@@ -42,16 +43,70 @@ def initialize_period(match, profile):
                     match.counters.setdefault(definition.id, {}).setdefault(pid, {})[str(match.period)] = value
 
 
+# Bekannte Bezeichnungen der Spielleitung → stabiler Code und englische Anzeige.
+# Unbekannte Werte werden nicht übersetzt (code/label_en null). Vergleich ohne Groß-/Kleinschreibung.
+KNOWN_TERMS = {
+    "gruppenphase": ("group_stage", "Group stage"),
+    "play-offs": ("play_offs", "Play-offs"),
+    "semi final #1": ("semi_final_1", "Semi-final 1"),
+    "semi final #2": ("semi_final_2", "Semi-final 2"),
+    "match for place 5th": ("fifth_place_match", "5th-place match"),
+    "bronze medal match": ("bronze_medal_match", "Bronze medal match"),
+    "gold medal match": ("gold_medal_match", "Gold medal match"),
+}
+GROUP = re.compile(r"^gruppe ([a-z])$")
+# Abschnittsbezeichnungen, die bei genau zwei Abschnitten Halbzeiten bedeuten.
+HALF_LABELS = {"halbzeit", "half", "poločas"}
+HALF_TIME_LABELS = {"not_started": "Not started", "first_half": "1st half", "half_time": "Half-time",
+                    "second_half": "2nd half", "full_time": "Full-time"}
+
+
+def term(value, label_en=""):
+    """Originalwert, Code und englisches Label; null, wenn keine Angabe vorhanden ist."""
+    if not value:
+        return None
+    key = value.casefold()
+    group = GROUP.match(key)
+    code, label = KNOWN_TERMS.get(key) or (
+        (f"group_{group[1]}", f"Group {group[1].upper()}") if group else (None, None))
+    return dict(code=code, name=value, label_en=label_en or label)
+
+
+def halves(profile):
+    return bool(profile and profile.periods == 2 and profile.period_label.casefold() in HALF_LABELS)
+
+
+def period_info(match, profile):
+    use_halves = halves(profile)
+    if match.status in ("scheduled", "ready"):
+        code = "not_started"
+    elif match.status == "finished":
+        code = "full_time" if use_halves else "finished"
+    elif match.intermission:
+        code = "half_time" if use_halves else f"intermission_after_{match.period}"
+    else:
+        code = ("first_half", "second_half")[match.period - 1] if use_halves else f"period_{match.period}"
+    return dict(number=match.period, intermission=match.intermission, code=code,
+                label_en=HALF_TIME_LABELS[code] if use_halves else None)
+
+
 def live_view(state):
     match = current_match(state)
     result = dict(status="idle", revision=state.revision, match_id=None,
-                  play_area=None, left=None, right=None, officials=[], period=None)
+                  play_area=None, left=None, right=None, officials=[], period=None,
+                  period_info=None, stage=None, round=None)
     if match is None:
         return result
+    profile = state.event.sport_profile if state.event else None
     result.update(status=match.status, match_id=match.id, period=match.period,
-                  play_area=next(a.model_dump() for a in state.play_areas if a.id == match.play_area_id))
+                  play_area=next(a.model_dump() for a in state.play_areas if a.id == match.play_area_id),
+                  period_info=period_info(match, profile),
+                  stage=term(match.stage, match.stage_label), round=term(match.round, match.round_label))
     referees = {referee.id: referee for referee in state.referees}
-    result["officials"] = [referees[referee_id].model_dump() for referee_id in match.officials]
+    # Officials sind im Modell ausschließlich Einträge der Referee-Liste; position = Reihenfolge im Spiel.
+    result["officials"] = [dict(referees[referee_id].model_dump(), position=index, role="referee",
+                                role_label_en="Referee")
+                           for index, referee_id in enumerate(match.officials, start=1)]
     for key, pid in (("left", match.side_l), ("right", match.side_r)):
         if pid:
             participant = next(p for p in state.participants if p.id == pid)
@@ -168,6 +223,10 @@ class Service:
                         raise Conflict("Nur geplante Spiele können bearbeitet werden.")
                     if old and "officials" not in item.model_fields_set:
                         item.officials = list(old.officials)
+                    # Ältere Clients kennen diese Felder nicht und dürfen sie nicht löschen.
+                    for key in ("stage", "stage_label", "round_label"):
+                        if old and key not in item.model_fields_set:
+                            setattr(item, key, getattr(old, key))
                     item = Match(**item.model_dump())
                     initialize_period(item, state.event.sport_profile if state.event else None)
                 if old:
@@ -189,6 +248,7 @@ class Service:
             "prepare": {"scheduled", "ready"}, "unprepare": {"ready"},
             "start": {"ready"}, "score": {"live", "paused"},
             "counter": {"live", "paused"}, "period": {"live", "paused"},
+            "intermission": {"live", "paused"},
             "pause": {"live"}, "resume": {"paused"},
             "switch-sides": {"ready", "live", "paused"},
             "undo": {"live", "paused"}, "finish": {"live", "paused"},
@@ -247,7 +307,17 @@ class Service:
                     value = 0 if definition.reset_each_period else counter_value(match, definition, pid)
                     match.counters[definition.id][pid][str(command.period)] = value
             match.period = command.period
+            match.intermission = False
             event.update(type="period_changed", period=match.period)
+        elif operation == "intermission":
+            profile = state.event.sport_profile
+            if command.intermission == match.intermission:
+                raise Conflict("Pause zwischen Abschnitten ist bereits so gesetzt.")
+            if command.intermission and (not profile or match.period >= profile.periods):
+                raise Conflict("Pause zwischen Abschnitten nur vor dem letzten Abschnitt.")
+            match.intermission = command.intermission
+            event.update(type="intermission_started" if match.intermission else "intermission_ended",
+                         period=match.period)
         elif operation == "switch-sides":
             match.side_l, match.side_r = match.side_r, match.side_l
             event["type"] = "side_switch"
@@ -261,6 +331,7 @@ class Service:
             event.update(participant_id=last.participant_id, delta=-last.delta, undo_of=last.id)
         elif operation == "finish":
             match.status = "finished"
+            match.intermission = False
             event["type"] = "match_finished"
         if operation not in ("score", "counter"):
             match.control_revision += 1

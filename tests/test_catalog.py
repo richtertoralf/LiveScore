@@ -279,7 +279,9 @@ class CatalogTest(unittest.TestCase):
         event_id = self.imported(); self.select(event_id)
         original = self.snapshot()['matches'][0]['officials']
         referees = self.snapshot()['referees']
-        expected = [next(r for r in referees if r['id']==rid) for rid in original]
+        # Bisherige Felder unverändert, Funktion und Reihenfolge additiv.
+        expected = [{**next(r for r in referees if r['id']==rid),'position':index,'role':'referee','role_label_en':'Referee'}
+                    for index,rid in enumerate(original,start=1)]
         def check():
             self.assertEqual(self.snapshot()['matches'][0]['officials'],original)
             self.assertEqual(self.client.get('/api/v1/matches').json()[0]['officials'],original)
@@ -320,7 +322,7 @@ class CatalogTest(unittest.TestCase):
             first,second = a.receive_json(),b.receive_json()
             self.assertEqual(first,second)
             self.assertEqual([r['id'] for r in first['live']['officials']],plan['officials'])
-            person = first['live']['officials'][0]
+            person = {key:first['live']['officials'][0][key] for key in ('id','name','country_code')}
             self.configure('referees',{**person,'name':'Updated Official'})
             first,second = a.receive_json(),b.receive_json()
             self.assertEqual(first,second)

@@ -330,7 +330,8 @@ curl --fail http://HOST:8730/api/v1/live
 
 Die GFX benötigt ausschließlich die URL; keine Anmeldung, keine Cookies und
 keine Zugangsdaten. Der Endpoint liefert den bestehenden aufbereiteten Live-State
-mit Score, Seiten, Officials und aktuellen Countern. Er kann keine Daten ändern.
+mit Score, Seiten, Nationen, Officials samt Funktion, aktuellen Countern,
+Spielperiode, Turnierphase und Runde. Er kann keine Daten ändern.
 Alle anderen fachlichen GET-APIs, Exporte, sämtliche Mutationen und der WebSocket
 bleiben bei aktiviertem Auth geschützt. Unauthentifizierte POSTs ergeben 401.
 
@@ -372,7 +373,9 @@ Weitere Listener und die übernommenen Projektmuster stehen in
 
 `imports/prague-2026.json` enthält den bereitgestellten echten Spielplan des
 „13th Cup of Central Europe Cities 2026“: **6 Teilnehmer, 6 Referees, 14 Spiele**,
-jeweils **3 Officials** in vorgegebener Reihenfolge. `examples/prague-2026.json`
+jeweils **3 Officials** in vorgegebener Reihenfolge. Die Turnierphase stammt aus der
+Spalte „Phase“ des Spielplans (`Gruppenphase` bzw. `Play-Offs`), die Runde aus der
+Spalte „Gruppe“. `examples/prague-2026.json`
 ist dieselbe Veranstaltung. Spätere Paarungen bleiben Platzhalter und werden
 manuell gesetzt; es gibt keine automatische Tabellen- oder Play-off-Logik.
 Teilnehmer enthalten die Ländercodes CZ, DE, KZ, GR, DE und DE. Das Sportprofil
@@ -502,7 +505,8 @@ Veranstaltung; sie sind kein zeitgleicher Gesamtsnapshot aller Events.
 2. Play Areas frei benennen: Field 1, Table 1, Court 1, Mat 1, Ring A usw.
 3. Teilnehmer mit Namen, optional Kurzname, Ländercode und Logo-Pfad erfassen. IDs werden in
    der Oberfläche automatisch vergeben und bleiben bei Bearbeitung erhalten.
-4. Spielplan mit Datum, Uhrzeit, Play Area und Runde anlegen. Unbekannte Teilnehmer
+4. Spielplan mit Datum, Uhrzeit, Play Area, optionaler Turnierphase und Runde
+   (Gruppe/Spielrunde) anlegen. Unbekannte Teilnehmer
    bleiben leer; Platzhalter können beispielsweise „1st Group A“ heißen.
    Spiele müssen innerhalb des Veranstaltungszeitraums liegen.
 5. Zur Bedienung wechseln und ein Spiel auswählen. Die Liste ist nach Datum und
@@ -549,7 +553,8 @@ Dopplungen innerhalb desselben Spiels werden abgewiesen. API und Modell erlauben
 **0 bis beliebig viele** Officials.
 
 In der Live-Ansicht stehen Namen und optionale Ländercodes klein unter den
-Bedienelementen. Officials haben keinen Einfluss auf Status, Score oder L/R.
+Bedienelementen. `GET /api/v1/live` gibt sie mit `position`, `role: "referee"` und
+`role_label_en: "Referee"` aus. Officials haben keinen Einfluss auf Status, Score oder L/R.
 Paarungskorrektur, Vorbereitung, Seitenwechsel, Undo, Pause/Fortsetzen und Neustart
 lassen ihre Zuweisung unverändert. Die bestehende Konfigurationssperre während
 `ready/live/paused` gilt auch für Referees und Official-Zuweisungen.
@@ -633,7 +638,31 @@ offenen Dialog. Beim bestätigten Wechsel:
 - bleiben Score, Officials, L/R-Zuordnung und LIVE-/PAUSE-Status unverändert.
 
 Seitenwechsel und Fortsetzen sind weiterhin eigene Aktionen. Es gibt keine Uhr
-und keinen automatischen Perioden- oder Seitenwechsel. Fehlende Counterwerte
+und keinen automatischen Perioden- oder Seitenwechsel.
+
+### Halbzeitpause
+
+Solange noch ein weiterer Abschnitt folgt, zeigt die Bedienung während LIVE/PAUSE
+unter den Steuerelementen **Halbzeitpause** (bei Profilen ohne Halbzeiten:
+**Pause zwischen Abschnitten**). Der Klick setzt ohne Dialog `intermission: true`;
+die Periodenanzeige zeigt „1. Halbzeit · Halbzeitpause“, die API `half_time` /
+„Half-time“. Ein versehentliches Setzen lässt sich mit **Zurück zu 1. Halbzeit**
+korrigieren. **2. Halbzeit starten** (bestehender Bestätigungsdialog) beendet eine
+gesetzte Halbzeitpause automatisch. Damit ergibt sich die Auswahl
+1st half → Half-time → 2nd half.
+
+- Halbzeitpause, Pause/Fortsetzen und Seitenwechsel sind voneinander unabhängig.
+  Eine normale Pause ist keine Halbzeitpause; ein Seitenwechsel ändert keine Periode.
+- Score, Counter, Undo und Seitenwechsel bleiben in der Halbzeitpause möglich;
+  Counter zählen weiter zum aktuellen Abschnitt.
+- Zurückspringen aus der 2. Halbzeit ist weiterhin nicht vorgesehen, weil dabei
+  bereits erfasste Periodenwerte ihre Bedeutung verlören.
+- `Ergebnis bestätigen` beendet auch eine gesetzte Halbzeitpause (`full_time`).
+- Jedes Spiel startet ohne Halbzeitpause in Abschnitt 1; Werte eines vorherigen
+  Spiels werden nicht übernommen. Bestandsdaten ohne `intermission` gelten als
+  `false`; es wird keine Halbzeit abgeleitet oder erfunden.
+- Die Ereignisliste protokolliert `intermission_started` und `intermission_ended`
+  mit dem aktuellen Abschnitt. Fehlende Counterwerte
 werden als null interpretiert; bei nicht zurückgesetzten Countern wird ein fehlender
 aktueller Abschnitt aus dem letzten gespeicherten Abschnitt übernommen. Historische
 Werte werden beim Weiterzählen nicht rückwirkend verändert. Nichtnull-Werte für
@@ -668,8 +697,14 @@ Die vollständige Datei hat `schema_version: 1`, eine monotone `revision`, `even
 `play_areas`, `participants`, `referees`, `matches`, `active_match_id` und `events`.
 Das [Beispiel](examples/prague-2026.json) zeigt das vollständige Format.
 Ein Match enthält die Planfelder `id`, `date`, `time`, `play_area_id`, `round`,
-`participant_1`, `participant_2`, `officials`, optionale Platzhalter und zusätzlich `status`,
-`side_l`, `side_r`, `scores`, `control_revision`, `period` und `counters`.
+`stage`, `stage_label`, `round_label`, `participant_1`, `participant_2`, `officials`,
+optionale Platzhalter und zusätzlich `status`, `side_l`, `side_r`, `scores`,
+`control_revision`, `period`, `intermission` und `counters`. `stage` ist die
+Turnierphase (Excel-Spalte „Phase“), `round` die Gruppe bzw. Spielrunde (Spalte
+„Gruppe“); `stage_label`/`round_label` sind optionale englische Anzeigetexte.
+Fehlende neue Felder bedeuten `""` bzw. `false`; die Schema-Version bleibt 1,
+eine Migration ist nicht nötig. API-Clients, die ein geplantes Spiel ohne diese
+Felder speichern, lassen vorhandene Werte unverändert.
 Datum und Uhrzeit sind lokale Veranstaltungsangaben; Ereigniszeitstempel sind UTC
 im ISO-Format.
 
@@ -707,7 +742,8 @@ Temp-/Flush-/fsync-/Replace-Verfahren gespeichert. Anlegen/Importieren speichern
 nur die neue Event-Datei; Auswählen schreibt nur den Auswahlzeiger.
 
 Die Ereignisliste protokolliert insbesondere `match_started`, `score`, `pause`,
-`resume`, `side_switch`, `match_finished`, `counter`, `period_changed` und `undo` samt Spiel-/Teilnehmerbezug,
+`resume`, `side_switch`, `match_finished`, `counter`, `period_changed`,
+`intermission_started`, `intermission_ended` und `undo` samt Spiel-/Teilnehmerbezug,
 Zeitstempel, Revision und Request-ID. Undo markiert das Score-Ereignis und verweist
 auf seine ID. Counter-Ereignisse enthalten zusätzlich `counter_id`, `period` und
 `delta`; Periodenwechsel nennen den neuen Abschnitt. Die Liste dient auch zur persistenten Request-Deduplizierung.
@@ -751,7 +787,8 @@ Lock; veraltete Requests dürfen keinen Wert in einer neuen Periode verändern.
 `selection_token` aus dem angezeigten UI-Snapshot.** Die Kennung schützt auch vor
 A → B → A-Wechseln bei gleicher Event-Revision. Requests ohne passenden Kontext
 werden mit 409 abgewiesen. Das ist eine bewusste Ergänzung der internen Bedien-API;
-die GET-Live-API behält ihre bisherigen Felder; Officials, Ländercodes, Perioden und Counter kommen additiv hinzu. Alte Browserseiten müssen
+die GET-Live-API behält ihre bisherigen Felder; Officials, Ländercodes, Perioden, Counter,
+`period_info`, `stage`, `round` und Officials-Funktionen kommen additiv hinzu. Alte Browserseiten müssen
 nach dem Upgrade neu geladen werden. Ein Event-Wechsel aktualisiert auch offene
 Config-Seiten, schließt alte Formulare und meldet verworfene ungespeicherte Entwürfe.
 
@@ -782,13 +819,16 @@ Interaktive OpenAPI-Dokumentation: `/docs`, Schema: `/openapi.json`.
   "revision": 6,
   "match_id": "match-001",
   "period": 1,
+  "period_info": {"number": 1, "intermission": false, "code": "first_half", "label_en": "1st half"},
+  "stage": {"code": "group_stage", "name": "Gruppenphase", "label_en": "Group stage"},
+  "round": {"code": "group_a", "name": "Gruppe A", "label_en": "Group A"},
   "play_area": {"id": "field-1", "label": "Field 1"},
   "left": {"id": "bsc-praha", "name": "BSC Praha", "short_name": "BSC", "country_code": "CZ", "score": 2, "counters": {"team_fouls": 0}, "counter_states": {"team_fouls": "normal"}},
   "right": {"id": "fc-ingolstadt-04", "name": "FC Ingolstadt 04", "short_name": "FCI", "country_code": "DE", "score": 1, "counters": {"team_fouls": 0}, "counter_states": {"team_fouls": "normal"}},
   "officials": [
-    {"id": "luis-ramon-perez-macias", "name": "Luis Ramon Pérez Macias", "country_code": "ES"},
-    {"id": "bennet-kruekemeier", "name": "Bennet Krükemeier", "country_code": "DE"},
-    {"id": "juan-carlos-paule", "name": "Juan Carlos Paule", "country_code": "ES"}
+    {"id": "luis-ramon-perez-macias", "name": "Luis Ramon Pérez Macias", "country_code": "ES", "position": 1, "role": "referee", "role_label_en": "Referee"},
+    {"id": "bennet-kruekemeier", "name": "Bennet Krükemeier", "country_code": "DE", "position": 2, "role": "referee", "role_label_en": "Referee"},
+    {"id": "juan-carlos-paule", "name": "Juan Carlos Paule", "country_code": "ES", "position": 3, "role": "referee", "role_label_en": "Referee"}
   ]
 }
 ```
@@ -796,8 +836,8 @@ Interaktive OpenAPI-Dokumentation: `/docs`, Schema: `/openapi.json`.
 Das Beispiel entspricht Auswahl, Vorbereitung, Start und drei Score-Aktionen auf
 Basis der Beispieldatei und wird automatisiert gegen die API geprüft.
 Nach Seitenwechsel enthält `left` Ingolstadt mit 1 und `right` Praha mit 2.
-Ohne ausgewähltes Spiel: `status: "idle"`, `period`, `match_id`, `play_area`, `left` und
-`right` sind `null`. Beim ausgewählten, noch nicht vorbereiteten Spiel:
+Ohne ausgewähltes Spiel: `status: "idle"`, `period`, `period_info`, `stage`, `round`,
+`match_id`, `play_area`, `left` und `right` sind `null`. Beim ausgewählten, noch nicht vorbereiteten Spiel:
 `status: "scheduled"`, Match/Play Area sind vorhanden, `left` und `right` sind
 `null`. Ein bestätigtes Ergebnis bleibt als `finished` sichtbar, bis ein anderes
 Spiel ausgewählt wird. Fehlende Kurznamen erscheinen als leere Zeichenfolge.
@@ -811,6 +851,84 @@ je Counter `normal`, `warning` oder `critical` (Critical hat Vorrang).
 Ohne konfigurierten Counter sind beide Objekte leer. GFX muss keine Periodenhistorie
 auswerten. Das gesamte Profil und die Historie stehen im Tournament-State bzw.
 Export zur Verfügung.
+
+#### Additive Felder: Spielperiode, Turnierphase, Runde, Officials-Funktion
+
+Alle bisherigen Felder behalten Namen, Typ und Bedeutung. Neu hinzugekommen sind
+(ab `scheduled`, bei `idle` jeweils `null`):
+
+| Feld | Inhalt |
+|---|---|
+| `period_info.number` | identisch mit `period` |
+| `period_info.intermission` | `true` während einer ausdrücklich gesetzten Pause zwischen zwei Abschnitten (Halbzeitpause) |
+| `period_info.code` | stabiler Code, siehe unten |
+| `period_info.label_en` | englisches Label oder `null` |
+| `stage` | Turnierphase: `code`, `name` (Originaltext), `label_en`; `null` ohne Angabe |
+| `round` | Gruppe bzw. Spielrunde aus `match.round`, gleiche Struktur wie `stage` |
+| `officials[].position` | Reihenfolge im Spiel ab 1, keine Funktion |
+| `officials[].role` / `role_label_en` | `referee` / `Referee` |
+
+`period_info.code` richtet sich nach bestehendem Spielstatus, `period` und
+`intermission`:
+
+| Situation | Halbzeit-Profil | anderes oder kein Profil |
+|---|---|---|
+| `scheduled`, `ready` | `not_started` · „Not started“ | `not_started` · `null` |
+| `live`/`paused`, Abschnitt 1 | `first_half` · „1st half“ | `period_1` · `null` |
+| `live`/`paused` mit `intermission` | `half_time` · „Half-time“ | `intermission_after_1` · `null` |
+| `live`/`paused`, Abschnitt 2 | `second_half` · „2nd half“ | `period_2` · `null` |
+| `finished` | `full_time` · „Full-time“ | `finished` · `null` |
+
+Ein **Halbzeit-Profil** liegt vor, wenn `sport_profile.periods` genau 2 ist und
+`period_label` (ohne Groß-/Kleinschreibung) `Halbzeit`, `Half` oder `Poločas` lautet.
+Das ist bei Prag der Fall. Boxen, Showdown oder Profile mit „Runde“/„Satz“
+erhalten keine Fußball-Labels, sondern nur neutrale Codes. `paused` ist eine
+normale Unterbrechung und erzeugt **nicht** „Half-time“.
+
+Für `stage` und `round` gilt diese feste Zuordnung (Vergleich ohne Groß-/Kleinschreibung,
+Originaltext bleibt in `name` erhalten):
+
+| Originalwert | `code` | `label_en` |
+|---|---|---|
+| Gruppenphase | `group_stage` | Group stage |
+| Gruppe A … Gruppe Z | `group_a` … `group_z` | Group A … Group Z |
+| Play-Offs | `play_offs` | Play-offs |
+| semi final #1 / #2 | `semi_final_1` / `semi_final_2` | Semi-final 1 / Semi-final 2 |
+| match for place 5th | `fifth_place_match` | 5th-place match |
+| bronze medal match | `bronze_medal_match` | Bronze medal match |
+| gold medal match | `gold_medal_match` | Gold medal match |
+
+Unbekannte Werte werden nicht übersetzt: `code` und `label_en` sind dann `null`,
+`name` enthält den Originaltext. Im Spiel-Editor kann optional ein englischer
+Anzeigetext (`stage_label`, `round_label`) hinterlegt werden; er ersetzt dann nur
+`label_en`. Teilnehmer- und Personennamen werden nie übersetzt.
+
+Alle Officials eines Spiels sind im Modell Einträge der **Referee**-Liste und
+werden deshalb als `referee`/„Referee“ ausgegeben. `position` gibt nur die
+Reihenfolge wieder; Funktionen wie Assistant Referee oder Timekeeper werden daraus
+nicht abgeleitet.
+
+**Verfügbarkeit** – drei Fälle werden unterschieden:
+
+- *Von der Quelle nicht unterstützt:* Das Feld fehlt ganz, z. B. bei älteren
+  LiveScore-Versionen `period_info`/`stage`/`round`/`role`, bei Countern ein
+  nicht konfigurierter Counter in `counters`. **Trikotfarben liefert LiveScore
+  nicht**; es gibt kein Farbfeld.
+- *Unterstützt, aber beim aktuellen Spiel keine Angabe:* `stage`/`round` sind
+  `null`, `label_en`/`code` sind `null`, `country_code` ist gemäß bestehendem
+  Vertrag `""`, `officials` ist `[]`.
+- *Gültiger Wert:* auch `0` ist ein echter Wert, z. B. `counters.team_fouls: 0`.
+
+Ländercodes bleiben **ISO 3166-1 Alpha-2** (`CZ`, `DE`, `KZ`, `GR`), wie sie die
+GFX-Engine für ihre Flaggendateien erwartet. Spielpläne mit IOC-/FIFA-Kürzeln müssen
+bei der Erfassung umgesetzt werden: `CZE → CZ`, `GER → DE`, `KAZ → KZ`, `GRE → GR`.
+`GER` und `GRE` sind **keine** ISO-Alpha-3-Codes (dort `DEU`/`GRC`); LiveScore nimmt
+drei Buchstaben deshalb nicht an und rät keine Nation. Die Nation gehört zum
+Teilnehmer und wandert bei Seitenwechsel mit Name, Score und Countern mit.
+
+Alle neuen Felder stehen auch im `live`-Objekt des WebSocket-/Tournament-Snapshots.
+Jede Änderung von Halbzeitpause, Periode oder Spielplan erhöht `revision`, auch ohne
+Scoreänderung; Pollende Clients sehen sie beim nächsten Abruf.
 
 ```sh
 curl --fail http://127.0.0.1:8730/api/v1/live
@@ -844,6 +962,7 @@ keine Sport-, Turnier- oder Seitenwechsellogik. HTTP-Antworten werden mit
 | `POST /api/v1/live/score` | +1 oder −1 für Teilnehmer auf angegebener Seite |
 | `POST /api/v1/live/counter` | +1 oder −1 für einen Teilnehmer-Counter im aktuellen Abschnitt |
 | `POST /api/v1/live/period` | bestätigter Wechsel zum nächsten Abschnitt, nur live/paused |
+| `POST /api/v1/live/intermission` | Pause zwischen Abschnitten setzen/zurücknehmen (`intermission`: true/false), nur live/paused |
 | `POST /api/v1/live/pause` | live → paused |
 | `POST /api/v1/live/resume` | paused → live |
 | `POST /api/v1/live/switch-sides` | nur L/R tauschen (ready/live/paused) |
@@ -883,6 +1002,9 @@ und `delta` (−1 oder +1). Es verwendet wie Score **keine** `expected_revision`
 `POST /api/v1/live/period` benötigt `request_id`, `event_id`, `selection_token`,
 `match_id`, `expected_revision` und die **Zielperiode** `period` (aktuell + 1).
 Die Bestätigung erfolgt im Browser; der Server prüft Zustand, Revision und Profilgrenze.
+`POST /api/v1/live/intermission` benötigt `request_id`, `event_id`, `selection_token`,
+`match_id`, `expected_revision` und `intermission` (boolean). Setzen ist nur vor dem
+letzten Abschnitt möglich; derselbe Zielwert wie der aktuelle ergibt 409.
 WebSocket-Heartbeat: `{"heartbeat": true}`. Normale Nachrichten entsprechen
 `GET /api/v1/tournament`. Nach spätestens etwa 14 Sekunden ohne Nachricht sperrt
 die UI die Bedienung; erkannter Browser-Offline-Status sperrt sofort.
@@ -972,6 +1094,13 @@ parallele Requests, persistente Deduplizierung, veraltete Aktionen und zwei WebS
 Der Browserlauf importiert das Prag-Profil, prüft Warnung bei 4 und Critical bei
 5/6, Bestätigung/Abbruch und Konflikte beim Halbzeitwechsel, zwei synchronisierte
 Browser sowie Export/Reimport und echten Serverneustart mit Periode-2-Countern.
+`tests/test_live_metadata.py` prüft die additiven Live-API-Felder: Turnierphase und
+Runde getrennt samt englischer Labels und unbekannter Werte, drei Officials mit
+Funktion, Position und Sonderzeichen, vorhandene/fehlende Nationen und korrigierte
+Paarungen, 1. Halbzeit/normale Pause/Halbzeitpause/2. Halbzeit/Full-time,
+Seitenwechsel ohne Periodenwechsel, WebSocket/Poll ohne Scoreänderung, Neustart,
+neutrale Codes für andere Profile, Bestandsdateien ohne neue Felder und die
+bisherigen Feldtypen für bestehende Clients.
 
 ## Bewusste Grenzen
 

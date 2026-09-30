@@ -215,6 +215,15 @@ export const translations = {
     "Score-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ±1.": "Score action requires a valid match, participant and delta ±1.",
     "Score-Ereignisse passen nicht zum gespeicherten Ergebnis (Undo wäre negativ).": "Score history does not match the saved result (undo would be negative).",
     "Language": "Language",
+    "Turnierphase (optional, z. B. Gruppenphase)": "Tournament stage (optional, e.g. group stage)",
+    "Turnierphase englisch (optional)": "Tournament stage, English display (optional)",
+    "Runde englisch (optional)": "Round, English display (optional)",
+    "Halbzeitpause": "Half-time",
+    "Pause zwischen Abschnitten": "Break between periods",
+    "Pause zwischen Abschnitten ist bereits so gesetzt.": "The break between periods is already set that way.",
+    "Pause zwischen Abschnitten nur vor dem letzten Abschnitt.": "A break between periods is only possible before the last period.",
+    "Pause zwischen Abschnitten nur im laufenden Spiel vor dem letzten Abschnitt.": "A break between periods is only possible in a running match before the last period.",
+    "period_return": "Back to {label} {period}",
     "next_period": "Start {label} {period}"
   },
   "de": {
@@ -433,6 +442,15 @@ export const translations = {
     "Score-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ±1.": "Score-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ±1.",
     "Score-Ereignisse passen nicht zum gespeicherten Ergebnis (Undo wäre negativ).": "Score-Ereignisse passen nicht zum gespeicherten Ergebnis (Undo wäre negativ).",
     "Language": "Sprache",
+    "Turnierphase (optional, z. B. Gruppenphase)": "Turnierphase (optional, z. B. Gruppenphase)",
+    "Turnierphase englisch (optional)": "Turnierphase englisch (optional)",
+    "Runde englisch (optional)": "Runde englisch (optional)",
+    "Halbzeitpause": "Halbzeitpause",
+    "Pause zwischen Abschnitten": "Pause zwischen Abschnitten",
+    "Pause zwischen Abschnitten ist bereits so gesetzt.": "Pause zwischen Abschnitten ist bereits so gesetzt.",
+    "Pause zwischen Abschnitten nur vor dem letzten Abschnitt.": "Pause zwischen Abschnitten nur vor dem letzten Abschnitt.",
+    "Pause zwischen Abschnitten nur im laufenden Spiel vor dem letzten Abschnitt.": "Pause zwischen Abschnitten nur im laufenden Spiel vor dem letzten Abschnitt.",
+    "period_return": "Zurück zu {period}. {label}",
     "next_period": "{period}. {label} starten"
   },
   "cs": {
@@ -651,6 +669,15 @@ export const translations = {
     "Score-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ±1.": "Změna skóre vyžaduje platný zápas, účastníka a delta ±1.",
     "Score-Ereignisse passen nicht zum gespeicherten Ergebnis (Undo wäre negativ).": "Historie skóre neodpovídá uloženému výsledku (vrácení by bylo záporné).",
     "Language": "Jazyk",
+    "Turnierphase (optional, z. B. Gruppenphase)": "Fáze turnaje (volitelné, např. skupinová fáze)",
+    "Turnierphase englisch (optional)": "Fáze turnaje – anglický text (volitelné)",
+    "Runde englisch (optional)": "Kolo – anglický text (volitelné)",
+    "Halbzeitpause": "Poločasová přestávka",
+    "Pause zwischen Abschnitten": "Přestávka mezi částmi",
+    "Pause zwischen Abschnitten ist bereits so gesetzt.": "Přestávka mezi částmi je již takto nastavena.",
+    "Pause zwischen Abschnitten nur vor dem letzten Abschnitt.": "Přestávka mezi částmi je možná jen před poslední částí.",
+    "Pause zwischen Abschnitten nur im laufenden Spiel vor dem letzten Abschnitt.": "Přestávka mezi částmi je možná jen v probíhajícím zápase před poslední částí.",
+    "period_return": "Zpět na {period}. {label}",
     "next_period": "Zahájit {period}. {label}"
   }
 };
@@ -662,6 +689,7 @@ export function t(key) {
   return Object.hasOwn(selected,key) ? selected[key] : Object.hasOwn(translations.en,key) ? translations.en[key] : key;
 }
 export function periodAction(period,label) { return t('next_period').replace('{period}',period).replace('{label}',t(label)); }
+export function periodReturn(period,label) { return t('period_return').replace('{period}',period).replace('{label}',t(label)); }
 export function errorText(detail) {
   const key = typeof detail === 'string' ? detail.replace(/^Value error, /,'') : 'invalid_input';
   return Object.hasOwn(translations.en,key) ? t(key) : t('invalid_input');

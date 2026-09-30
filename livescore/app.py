@@ -70,6 +70,10 @@ class Period(MatchCommand):
     period: int = Field(strict=True, ge=1)
 
 
+class Intermission(MatchCommand):
+    intermission: bool = Field(strict=True)
+
+
 def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, auth_config: AuthConfig | None = None):
     if data_dir is None:
         if data_file is None:
@@ -206,6 +210,10 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     @app.post("/api/v1/live/period")
     async def period(command: Period):
         return await app.state.service.apply("period", command)
+
+    @app.post("/api/v1/live/intermission")
+    async def intermission(command: Intermission):
+        return await app.state.service.apply("intermission", command)
 
     for operation in ("select", "unprepare", "start", "pause", "resume", "switch-sides", "undo", "finish"):
         add_action(operation)

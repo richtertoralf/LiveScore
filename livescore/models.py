@@ -93,6 +93,11 @@ class MatchPlan(Model):
     time: Time
     play_area_id: ID
     round: str = Field(default="", max_length=200)
+    # Turnierphase laut Spielleitung, z. B. „Gruppenphase“; getrennt von round (Gruppe/Spielrunde).
+    stage: str = Field(default="", max_length=200)
+    # Optionale englische Anzeigetexte; leer = bekannte Zuordnung oder nicht verfügbar.
+    stage_label: str = Field(default="", max_length=200)
+    round_label: str = Field(default="", max_length=200)
     participant_1: ID | None = None
     participant_2: ID | None = None
     placeholder_1: str = Field(default="Noch offen", max_length=200)
@@ -107,6 +112,8 @@ class Match(MatchPlan):
     scores: dict[ID, Count] = Field(default_factory=dict)
     control_revision: Count = 0
     period: int = Field(default=1, strict=True, ge=1)
+    # Pause zwischen `period` und dem nächsten Abschnitt (z. B. Halbzeitpause), unabhängig von paused.
+    intermission: bool = Field(default=False, strict=True)
     counters: dict[ID, dict[ID, dict[str, Count]]] = Field(default_factory=dict)
 
 
@@ -175,6 +182,9 @@ class State(Model):
                             raise ValueError("Zukünftige oder noch nicht gestartete Abschnitte müssen null sein.")
             if match.status in ("scheduled", "ready") and match.period != 1:
                 raise ValueError("Vor Spielbeginn muss der Abschnitt 1 sein.")
+            if match.intermission and (match.status not in ("live", "paused")
+                                       or match.period >= (profile.periods if profile else 1)):
+                raise ValueError("Pause zwischen Abschnitten nur im laufenden Spiel vor dem letzten Abschnitt.")
             if match.status == "scheduled":
                 if match.side_l is not None or match.side_r is not None or match.scores:
                     raise ValueError("Geplantes Spiel darf noch keinen Live-Zustand haben.")

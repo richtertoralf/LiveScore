@@ -1,12 +1,14 @@
-import { t, periodAction } from './i18n.js';
+import { t, periodAction, periodReturn } from './i18n.js';
 import { $, escape as e, Connection, message } from './common.js';
 let editPairing = false, finishRevision = null, periodRevision = null, selectionToken = null;
 const button = (action, label, cls = '', disabled = false) => `<button data-action="${action}" class="${cls}" data-disabled="${disabled}">${label}</button>`;
 const app = new Connection(render);
 const name = (state, id, fallback = t('Noch offen')) => state.participants.find(p => p.id === id)?.name || t(fallback);
 function matchInfo(state, match) {
-  return `${e(match.date)} · ${e(match.time.slice(0,5))} · ${e(state.play_areas.find(a => a.id === match.play_area_id)?.label)}${match.round ? ' · ' + e(match.round) : ''}`;
+  return `${e(match.date)} · ${e(match.time.slice(0,5))} · ${e(state.play_areas.find(a => a.id === match.play_area_id)?.label)}${match.stage ? ' · ' + e(match.stage) : ''}${match.round ? ' · ' + e(match.round) : ''}`;
 }
+// Server decides whether the profile's periods are halves; the UI only chooses the wording.
+const breakLabel = state => ['first_half','half_time','second_half'].includes(state.live.period_info?.code) ? t('Halbzeitpause') : t('Pause zwischen Abschnitten');
 function options(state, selected) {
   return `<option value="">${t("Bitte wählen")}</option>` + state.participants.map(p => `<option value="${e(p.id)}" ${p.id === selected ? 'selected' : ''}>${e(p.name)}</option>`).join('');
 }
@@ -33,7 +35,7 @@ function render(state) {
     const profile = state.event?.sport_profile;
     const status = {scheduled:t('NÄCHSTES SPIEL'),ready:t('BEREIT'),live:t('LIVE'),paused:t('PAUSE'),finished:t('BEENDET')}[match.status];
     html += `<div class="panel"><span class="status ${match.status}">${status}</span><p class="muted">${matchInfo(state,match)}</p>`;
-    if (profile) html += `<p id="period-label">${match.period}. ${e(t(profile.period_label))} · ${profile.periods} ${t("Abschnitte")}</p>`;
+    if (profile) html += `<p id="period-label">${match.period}. ${e(t(profile.period_label))}${match.intermission ? ` · <strong id="intermission-label">${e(breakLabel(state))}</strong>` : ''} · ${profile.periods} ${t("Abschnitte")}</p>`;
     if (match.status === 'scheduled') {
       html += `<div class="pairing-names">${e(name(state,match.participant_1,match.placeholder_1))}<span>${t("gegen")}</span>${e(name(state,match.participant_2,match.placeholder_2))}</div>`;
       if (editPairing || !match.participant_1 || !match.participant_2) {
@@ -62,7 +64,10 @@ function render(state) {
       if (['live','paused'].includes(match.status)) {
         html += button('undo',t('UNDO · letzter Score'),'undo',!state.can_undo);
         html += `<div class="actions">${button(match.status === 'live' ? 'pause' : 'resume',match.status === 'live' ? t('Pause') : t('Fortsetzen'))}${button('switch-sides',t('Seitenwechsel'))}</div>${button('finish-dialog',t('Spiel Ende'),'danger')}`;
-        if (profile && match.period < profile.periods) html += `<div class="period-action">${button('period-dialog',e(periodAction(match.period+1,profile.period_label)))}</div>`;
+        if (profile && match.period < profile.periods) {
+          const intermission = match.intermission ? e(periodReturn(match.period,profile.period_label)) : e(breakLabel(state));
+          html += `<div class="period-action stack">${button('intermission',intermission)}${button('period-dialog',e(periodAction(match.period+1,profile.period_label)))}</div>`;
+        }
       }
       if (match.status === 'finished') html += `<p>${t("Ergebnis bestätigt. Nächstes Spiel auswählen.")}</p>`;
     }
@@ -110,6 +115,7 @@ $('#live').addEventListener('click', async event => {
       counter_id:target.dataset.counter, delta:Number(target.dataset.delta),
       control_revision:match.control_revision, period:match.period});
   }
+  if (action === 'intermission') payload.intermission = !match.intermission;
   if (action === 'select') editPairing = false;
   await app.send(`live/${endpoint}`,payload);
 });

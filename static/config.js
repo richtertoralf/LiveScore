@@ -5,7 +5,7 @@ const definitions = {
   'play-areas': {title:t('Play Areas'), key:'play_areas', fields:[['label',t('Bezeichnung (z. B. Field 1)')]]},
   participants: {title:t('Teilnehmer'), key:'participants', fields:[['name',t('Name')],['short_name',t('Kurzname'),'optional'],['country_code',t('Ländercode (optional, z. B. DE)'),'optional'],['logo_path',t('Logo-Pfad'),'optional']]},
   referees: {title:t('Referees'), key:'referees', fields:[['name',t('Name')],['country_code',t('Ländercode (optional, z. B. DE)'),'optional']]},
-  matches: {title:t('Spielplan'), key:'matches', fields:[['date',t('Datum'),'date'],['time',t('Uhrzeit'),'time'],['play_area_id',t('Play Area'),'areas'],['round',t('Runde / Bezeichnung'),'optional'],['participant_1',t('Teilnehmer 1'),'people'],['participant_2',t('Teilnehmer 2'),'people'],['placeholder_1',t('Platzhalter 1'),'optional'],['placeholder_2',t('Platzhalter 2'),'optional']]}
+  matches: {title:t('Spielplan'), key:'matches', fields:[['date',t('Datum'),'date'],['time',t('Uhrzeit'),'time'],['play_area_id',t('Play Area'),'areas'],['stage',t('Turnierphase (optional, z. B. Gruppenphase)'),'optional'],['stage_label',t('Turnierphase englisch (optional)'),'optional'],['round',t('Runde / Bezeichnung'),'optional'],['round_label',t('Runde englisch (optional)'),'optional'],['participant_1',t('Teilnehmer 1'),'people'],['participant_2',t('Teilnehmer 2'),'people'],['placeholder_1',t('Platzhalter 1'),'optional'],['placeholder_2',t('Platzhalter 2'),'optional']]}
 };
 let initialized = false, selectionToken = null;
 const app = new Connection(render);

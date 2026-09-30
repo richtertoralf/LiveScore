@@ -25,8 +25,12 @@ startet keinen Server und verändert keine Konfiguration oder Veranstaltungsdate
 
 Auf Linux mit systemd, Python **3.12+**, `venv`, `pip` und Git:
 
+Das Repository ist **privat**. Zum Klonen GitHub-Username und ein Token mit
+Leserecht auf `richtertoralf/LiveScore` eingeben (Token als Passwort);
+`-c credential.helper=` verhindert, dass der Token gespeichert wird:
+
 ```sh
-git clone https://github.com/richtertoralf/LiveScore.git
+git -c credential.helper= clone https://github.com/richtertoralf/LiveScore.git
 cd LiveScore
 sudo ./install.sh
 livescore --version
@@ -51,6 +55,13 @@ sudo /opt/livescore/current/uninstall.sh
 # Nur bei ausdrücklich gewünschter Löschung aller Daten und Passwörter:
 sudo ./uninstall.sh --purge
 ```
+
+`sudo livescore --upgrade` und alternativ `sudo ./bin/livescore --install` fragen bei
+jedem Aufruf GitHub-Username und Token interaktiv ab und speichern nichts: kein
+Credential-Helper, kein Token in URL, Argumenten oder Fehlermeldungen. Bei
+abgelehntem Zugriff erscheint „Anmeldung fehlgeschlagen – Username/Token prüfen,
+Token braucht Leserecht auf richtertoralf/LiveScore“. Mit `--source PFAD` wird
+stattdessen ein lokaler Checkout ohne Abfrage verwendet.
 
 Upgrade lädt GitHub/main, baut zuerst eine neue venv, prüft die vorhandene Config,
 sichert Config/Auth/Eventdaten und startet den Dienst mit der neuen Laufzeit.

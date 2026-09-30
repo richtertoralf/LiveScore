@@ -1,6 +1,7 @@
 """Real staged lifecycle with shared test venv; no systemd or host writes."""
 import asyncio
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,6 +15,7 @@ from livescore.auth import Auth, PasswordChange, verify_password
 from livescore.bootstrap import inspect_config, seed_if_empty
 from livescore.config import load_config
 from livescore.storage import load, save, FileLease
+from tools import deploy
 from tools.deploy import Deployment, MARKER, RUNTIME, FILES, atomic_text
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -220,3 +222,85 @@ class SeedTest(unittest.TestCase):
             with self.assertRaises(RuntimeError): seed_if_empty(self.config,self.seed)
         finally: lease.release()
         self.assertTrue(seed_if_empty(self.config,self.seed))
+
+
+# Fake-git: fragt wie das echte Git über GIT_ASKPASS nach und protokolliert, was es sieht.
+FAKE_GIT = """#!/bin/sh
+{
+  printf 'args=%s\\n' "$*"
+  printf 'prompt=%s\\n' "$GIT_TERMINAL_PROMPT"
+  printf 'askpass=%s\\n' "$GIT_ASKPASS"
+  printf 'user=%s\\n' "$("$GIT_ASKPASS" "Username for 'https://github.com': ")"
+  printf 'token=%s\\n' "$("$GIT_ASKPASS" "Password for 'https://octo@github.com': ")"
+} > "$FAKE_GIT_LOG"
+exit "$FAKE_GIT_EXIT"
+"""
+
+
+class CloneTest(unittest.TestCase):
+    TOKEN = 'ghp_SECRET-token-123'
+
+    def setUp(self):
+        ARTIFACTS.mkdir(exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(dir=ARTIFACTS)
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        (self.root/'bin').mkdir(); git = self.root/'bin/git'
+        git.write_text(FAKE_GIT); git.chmod(0o755)
+        self.log = self.root/'git.log'
+        self.download = self.root/'download'; self.download.mkdir()
+        environment = dict(PATH=f"{self.root/'bin'}:{os.environ['PATH']}", FAKE_GIT_LOG=str(self.log), FAKE_GIT_EXIT='0')
+        patch.dict(os.environ, environment).start()
+        self.addCleanup(patch.stopall)
+
+    def clone(self, username='octo', token=TOKEN):
+        deploy.clone(self.download/'source', ask=lambda prompt: username, ask_secret=lambda prompt: token)
+
+    def seen(self):
+        return dict(line.split('=', 1) for line in self.log.read_text().splitlines())
+
+    def test_credentials_only_via_askpass_env_and_never_stored(self):
+        self.clone(username=' octo ')
+        seen = self.seen()
+        self.assertEqual(seen['args'], f'-c credential.helper= clone --depth 1 --branch main -- {deploy.REPOSITORY} {self.download/"source"}')
+        self.assertNotIn(self.TOKEN, seen['args'])
+        self.assertNotIn('@', deploy.REPOSITORY)
+        self.assertEqual((seen['prompt'], seen['user'], seen['token']), ('0', 'octo', self.TOKEN))
+        self.assertFalse(Path(seen['askpass']).exists())
+        self.assertNotIn(self.TOKEN, deploy.ASKPASS)
+        self.assertEqual(list(self.download.iterdir()), [])
+        self.assertNotIn('LIVESCORE_GIT_TOKEN', os.environ)
+
+    def test_auth_failure_is_readable_without_token_and_cleans_up(self):
+        os.environ['FAKE_GIT_EXIT'] = '128'
+        with self.assertRaises(RuntimeError) as error:
+            self.clone()
+        self.assertEqual(str(error.exception), deploy.AUTH_FAILED)
+        self.assertFalse(Path(self.seen()['askpass']).exists())
+        os.environ['FAKE_GIT_EXIT'] = '1'
+        with self.assertRaises(RuntimeError) as error:
+            self.clone()
+        self.assertEqual(str(error.exception), 'GitHub-Download fehlgeschlagen (git-Exitcode 1).')
+        self.assertNotIn(self.TOKEN, str(error.exception))
+
+    def test_missing_credentials_do_not_call_git(self):
+        for username, token in (('', self.TOKEN), ('octo', ''), ('octo', '   ')):
+            with self.subTest(username=username, token=token), self.assertRaises(RuntimeError):
+                self.clone(username, token)
+        self.assertFalse(self.log.exists())
+        self.assertEqual(list(self.download.iterdir()), [])
+
+    def test_impossible_operation_fails_before_asking_and_download_is_removed(self):
+        staging = self.root/'staging'
+        asked = []
+        def fake_clone(target, **kwargs):
+            asked.append(target); target.mkdir(); (target/'VERSION').write_text('bad')
+        with patch.object(deploy, 'clone', side_effect=fake_clone):
+            with patch('sys.argv', ['deploy.py', 'upgrade', '--staging-root', str(staging)]):
+                self.assertEqual(deploy.main(), 1)
+            self.assertEqual(asked, [])
+            with patch('sys.argv', ['deploy.py', 'install', '--staging-root', str(staging)]):
+                self.assertEqual(deploy.main(), 1)  # ungültige VERSION im Klon
+        self.assertEqual(len(asked), 1)
+        self.assertFalse(asked[0].exists())
+        self.assertEqual([p.name for p in (staging/'opt/livescore').iterdir()], [MARKER])

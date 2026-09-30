@@ -14,18 +14,50 @@ sudo apt-get install git python3 python3-venv
 
 Der Installer verändert keine Paketquellen, Firewall, Proxy-Konfiguration oder
 fremden Dienste. PyPI-Zugriff ist für die Dependency-Installation erforderlich,
-GitHub-Zugriff für Remote-Upgrades; der laufende Veranstaltungsbetrieb ist offline
-möglich. Paketdownload-Fehler vor dem Umschalten lassen die alte Laufzeit bestehen.
+GitHub-Zugriff für Download-Installation und Remote-Upgrades; der laufende
+Veranstaltungsbetrieb ist offline möglich. Paketdownload-Fehler vor dem Umschalten
+lassen die alte Laufzeit bestehen.
+
+## GitHub-Zugang (privates Repository)
+
+`richtertoralf/LiveScore` ist privat. Benötigt werden ein GitHub-Username und ein
+Token mit **Leserecht auf das Repository** (Fine-grained Token mit
+„Contents: Read-only“ oder klassischer Token mit `repo`). Da auf wechselnden Rechnern
+installiert wird, **speichert LiveScore keine Zugangsdaten**.
+
+`livescore --install` und `livescore --upgrade` ohne `--source` fragen bei jedem
+Aufruf interaktiv `GitHub-Username` und `GitHub-Token` ab (Token unsichtbar per
+`getpass`). Der Klon läuft per HTTPS mit `git -c credential.helper= clone`, damit
+kein Credential-Helper den Token ablegt. Die Werte gelangen nur als
+Umgebungsvariablen an den git-Prozess und werden über ein temporäres
+`GIT_ASKPASS`-Hilfsskript abgefragt, das danach gelöscht wird; der Token steht nie
+in der URL, in Kommandozeilenargumenten oder Fehlermeldungen. `GIT_TERMINAL_PROMPT=0`
+bleibt gesetzt, Git fragt also nicht selbst nach. Das temporäre Download-Verzeichnis
+unter `/opt/livescore/.download-*` wird in jedem Fall entfernt.
+
+Bei abgelehntem Zugriff (git-Exitcode 128) erscheint:
+„Anmeldung fehlgeschlagen – Username/Token prüfen, Token braucht Leserecht auf
+richtertoralf/LiveScore“. Andere Git-Fehler melden nur ihren Exitcode; Gits eigene
+Ausgabe darüber (z. B. Netzwerkfehler) enthält keine Zugangsdaten. Ob Installation
+bzw. Upgrade überhaupt möglich ist, wird vor der Abfrage geprüft.
 
 ## Erstinstallation
 
+Aus einem Checkout: Beim ersten Klonen fragt Git selbst nach Username und Token
+(Token als Passwort eingeben). `-c credential.helper=` verhindert auch hier, dass
+ein eventuell konfigurierter Helper den Token speichert.
+
 ```sh
-git clone https://github.com/richtertoralf/LiveScore.git
+git -c credential.helper= clone https://github.com/richtertoralf/LiveScore.git
 cd LiveScore
 sudo ./install.sh
 livescore --version
 systemctl status livescore
 ```
+
+`install.sh` installiert den lokalen Checkout ohne weitere Abfrage. Alternativ lädt
+`sudo ./bin/livescore --install` den aktuellen Stand von GitHub/main mit der oben
+beschriebenen Username-/Token-Abfrage.
 
 | Pfad | Inhalt |
 |---|---|
@@ -128,8 +160,10 @@ sudo livescore --upgrade
 sudo livescore --upgrade --source /pfad/zum/LiveScore-Checkout
 ```
 
-Das Upgrade lädt `main` aus dem festen GitHub-Repository in ein temporäres
-Verzeichnis innerhalb der Installation. Es führt keinen Git-Pull in lokalen
+Das Upgrade fragt GitHub-Username und Token ab (siehe
+[GitHub-Zugang](#github-zugang-privates-repository)) und lädt `main` aus dem festen
+GitHub-Repository in ein temporäres Verzeichnis innerhalb der Installation.
+Mit `--source` entfällt die Abfrage. Es führt keinen Git-Pull in lokalen
 Betreiberdaten aus und benötigt keinen Git-Checkout in der installierten Laufzeit.
 Es kann auch einen ergänzten Stand derselben Versionsnummer installieren;
 Versionsrückschritte werden abgewiesen.
@@ -211,7 +245,10 @@ Der Deployment-Smoke erstellt echte venvs und installiert die Requirements,
 startet ausschließlich eigene Loopback-Prozesse und prüft Fresh-Seed, geändertes
 Admin-Passwort, Live-Score/Fouls, Upgrade, Restart, Reinstall-Abweisung,
 Uninstall-Datenerhalt und Purge. Unit-Tests ergänzen Schreibfehler, Rollback,
-Deployment-Lock, Fremdpfadschutz und Seed-Grenzfälle. Browser-Smokes prüfen die
+Deployment-Lock, Fremdpfadschutz und Seed-Grenzfälle sowie mit einem Fake-`git`
+die Zugangsdatenübergabe per `GIT_ASKPASS`, das Löschen von Hilfsskript und
+Download-Verzeichnis und tokenfreie Fehlermeldungen. `tests/deployment_smoke.py
+--remote-upgrade` fragt entsprechend interaktiv nach Username und Token. Browser-Smokes prüfen die
 Version auf allen fünf Seiten und EN/DE/CS sowie die bisherigen Bedienabläufe.
 
 Auf codex-dev werden diese Tests nur unter `.test-artifacts/` ausgeführt.

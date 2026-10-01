@@ -49,6 +49,20 @@ Web: **http://HOST:8730/** · öffentliche API: **http://HOST:8730/api/v1/live**
 Initial: **admin / admin**, **operator / operator**.
 **Vor Internetfreigabe beide Passwörter ändern und HTTPS verwenden.**
 
+### Passwörter einrichten und zurücksetzen
+
+| Aufgabe | Vorgehen |
+|---|---|
+| Erstes Einrichten | Als `admin` (Startpasswort `admin`) anmelden; LiveScore führt zu **/users**. Dort zuerst das eigene, dann das Operator-Passwort setzen (12–1024 Zeichen). |
+| Operator-Passwort ändern oder vergessen | Als `admin` unter **/users** neu setzen; das alte Passwort ist nicht nötig. |
+| Admin-Passwort ändern | Als `admin` unter **/users** neu setzen. |
+| Admin-Passwort vergessen | Per SSH `sudo livescore --reset-admin-password`; neues Passwort wird zweimal verdeckt abgefragt, ohne Neustart. |
+| Beide vergessen | Erst Admin per SSH zurücksetzen, dann Operator unter **/users**. |
+
+Die Passwörter liegen nur als Hash in `/etc/livescore/auth.yml`; die Datei nicht
+von Hand bearbeiten. Details:
+[Admin-Passwort vergessen](#admin-passwort-vergessen-recovery-ohne-downtime).
+
 ```sh
 sudo livescore --upgrade
 sudo /opt/livescore/current/uninstall.sh

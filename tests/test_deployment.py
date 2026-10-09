@@ -60,6 +60,7 @@ class DeploymentTest(unittest.TestCase):
 
     def test_fresh_seed_wrapper_and_server(self):
         config = self.install()
+        self.assertEqual((self.deployment.current / 'LICENSE').read_bytes(), (ROOT / 'LICENSE').read_bytes())
         expected = load(ROOT / 'imports/prague-2026.json')
         self.assertEqual(load(config.data_dir / 'events/prague-2026.json'), expected)
         self.assertEqual((len(expected.matches), len(expected.participants), len(expected.referees)), (14,6,6))
@@ -227,14 +228,15 @@ class SeedTest(unittest.TestCase):
         self.assertTrue(seed_if_empty(self.config,self.seed))
 
 
-# Fake-git: fragt wie das echte Git über GIT_ASKPASS nach und protokolliert, was es sieht.
+# Fake git records the public download environment without asking for secrets.
 FAKE_GIT = """#!/bin/sh
 {
   printf 'args=%s\\n' "$*"
   printf 'prompt=%s\\n' "$GIT_TERMINAL_PROMPT"
   printf 'askpass=%s\\n' "$GIT_ASKPASS"
-  printf 'user=%s\\n' "$("$GIT_ASKPASS" "Username for 'https://github.com': ")"
-  printf 'token=%s\\n' "$("$GIT_ASKPASS" "Password for 'https://octo@github.com': ")"
+  printf 'ssh_askpass=%s\\n' "$SSH_ASKPASS"
+  printf 'user=%s\\n' "$LIVESCORE_GIT_USERNAME"
+  printf 'token=%s\\n' "$LIVESCORE_GIT_TOKEN"
 } > "$FAKE_GIT_LOG"
 exit "$FAKE_GIT_EXIT"
 """
@@ -256,44 +258,35 @@ class CloneTest(unittest.TestCase):
         patch.dict(os.environ, environment).start()
         self.addCleanup(patch.stopall)
 
-    def clone(self, username='octo', token=TOKEN):
-        deploy.clone(self.download/'source', ask=lambda prompt: username, ask_secret=lambda prompt: token)
+    def clone(self):
+        deploy.clone(self.download/'source')
 
     def seen(self):
         return dict(line.split('=', 1) for line in self.log.read_text().splitlines())
 
-    def test_credentials_only_via_askpass_env_and_never_stored(self):
-        self.clone(username=' octo ')
+    def test_public_clone_never_prompts_or_passes_inherited_credentials(self):
+        with patch.dict(os.environ, {'LIVESCORE_GIT_USERNAME': 'octo',
+                                     'LIVESCORE_GIT_TOKEN': self.TOKEN,
+                                     'GIT_ASKPASS': '/unexpected/helper'}):
+            with patch('builtins.input', side_effect=AssertionError('unexpected prompt')):
+                self.clone()
         seen = self.seen()
         self.assertEqual(seen['args'], f'-c credential.helper= clone --depth 1 --branch main -- {deploy.REPOSITORY} {self.download/"source"}')
-        self.assertNotIn(self.TOKEN, seen['args'])
-        self.assertNotIn('@', deploy.REPOSITORY)
-        self.assertEqual((seen['prompt'], seen['user'], seen['token']), ('0', 'octo', self.TOKEN))
-        self.assertFalse(Path(seen['askpass']).exists())
-        self.assertNotIn(self.TOKEN, deploy.ASKPASS)
-        self.assertEqual(list(self.download.iterdir()), [])
-        self.assertNotIn('LIVESCORE_GIT_TOKEN', os.environ)
-
-    def test_auth_failure_is_readable_without_token_and_cleans_up(self):
-        os.environ['FAKE_GIT_EXIT'] = '128'
-        with self.assertRaises(RuntimeError) as error:
-            self.clone()
-        self.assertEqual(str(error.exception), deploy.AUTH_FAILED)
-        self.assertFalse(Path(self.seen()['askpass']).exists())
-        os.environ['FAKE_GIT_EXIT'] = '1'
-        with self.assertRaises(RuntimeError) as error:
-            self.clone()
-        self.assertEqual(str(error.exception), 'GitHub-Download fehlgeschlagen (git-Exitcode 1).')
-        self.assertNotIn(self.TOKEN, str(error.exception))
-
-    def test_missing_credentials_do_not_call_git(self):
-        for username, token in (('', self.TOKEN), ('octo', ''), ('octo', '   ')):
-            with self.subTest(username=username, token=token), self.assertRaises(RuntimeError):
-                self.clone(username, token)
-        self.assertFalse(self.log.exists())
+        self.assertEqual((seen['prompt'], seen['user'], seen['token']), ('0', '', ''))
+        self.assertEqual((seen['askpass'], seen['ssh_askpass']), ('/bin/false', '/bin/false'))
+        self.assertNotIn(self.TOKEN, self.log.read_text())
         self.assertEqual(list(self.download.iterdir()), [])
 
-    def test_impossible_operation_fails_before_asking_and_download_is_removed(self):
+    def test_git_errors_report_exit_code_without_claiming_an_auth_failure(self):
+        for code in ('128', '1'):
+            with self.subTest(code=code):
+                os.environ['FAKE_GIT_EXIT'] = code
+                with self.assertRaises(RuntimeError) as error:
+                    self.clone()
+                self.assertEqual(str(error.exception), f'GitHub-Download fehlgeschlagen (git-Exitcode {code}).')
+                self.assertEqual(list(self.download.iterdir()), [])
+
+    def test_impossible_operation_fails_before_download_and_download_is_removed(self):
         staging = self.root/'staging'
         asked = []
         def fake_clone(target, **kwargs):

@@ -1,5 +1,12 @@
 # LiveScore 0.1.2
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
+![WebSocket](https://img.shields.io/badge/Live_updates-WebSocket-526EAF?style=flat-square)
+![Offline](https://img.shields.io/badge/Betrieb-Offline_m%C3%B6glich-388E3C?style=flat-square)
+
 Lokale Webanwendung zur einfachen Erfassung von Live-Spielständen bei Turnieren.
 Zwei Parteien treten gegeneinander an: Mannschaften, Einzelpersonen oder andere
 benannte Teilnehmer. Die Anwendung bleibt sportartenneutral und ist **keine
@@ -19,18 +26,18 @@ Die zentrale Versionsnummer steht in `VERSION`. In der installierten Python-Umge
 zeigt `python -m livescore --version` die Ausgabe `LiveScore 0.1.2`; der Befehl
 startet keinen Server und verändert keine Konfiguration oder Veranstaltungsdaten.
 
+**Technologien:** Python und FastAPI stellen die HTTP-API und WebSocket-Synchronisation bereit. Die Oberfläche verwendet HTML, CSS und JavaScript; Veranstaltungsdaten werden lokal als JSON gespeichert. Nach der Installation funktioniert die Anwendung ohne Internetverbindung.
+
 ## Installation und Start
 
 ### Linux-Dienst installieren
 
 Auf Linux mit systemd, Python **3.12+**, `venv`, `pip` und Git:
 
-Das Repository ist **privat**. Zum Klonen GitHub-Username und ein Token mit
-Leserecht auf `richtertoralf/LiveScore` eingeben (Token als Passwort);
-`-c credential.helper=` verhindert, dass der Token gespeichert wird:
+Das Repository ist öffentlich. Zum Klonen sind kein GitHub-Konto und kein Token erforderlich:
 
 ```sh
-git -c credential.helper= clone https://github.com/richtertoralf/LiveScore.git
+git clone https://github.com/richtertoralf/LiveScore.git
 cd LiveScore
 sudo ./install.sh
 livescore --version
@@ -70,12 +77,11 @@ sudo /opt/livescore/current/uninstall.sh
 sudo ./uninstall.sh --purge
 ```
 
-`sudo livescore --upgrade` und alternativ `sudo ./bin/livescore --install` fragen bei
-jedem Aufruf GitHub-Username und Token interaktiv ab und speichern nichts: kein
-Credential-Helper, kein Token in URL, Argumenten oder Fehlermeldungen. Bei
-abgelehntem Zugriff erscheint „Anmeldung fehlgeschlagen – Username/Token prüfen,
-Token braucht Leserecht auf richtertoralf/LiveScore“. Mit `--source PFAD` wird
-stattdessen ein lokaler Checkout ohne Abfrage verwendet.
+`sudo livescore --upgrade` und alternativ `sudo ./bin/livescore --install` laden
+den öffentlichen Stand von GitHub/main ohne Username- oder Token-Abfrage.
+Mit `--source PFAD` wird stattdessen ein lokaler Checkout verwendet.
+Bei älteren installierten Ständen kann die bisherige Abfrage noch vorhanden sein;
+für deren erstes Upgrade einen aktuellen Checkout mit `sudo ./upgrade.sh` verwenden.
 
 Upgrade lädt GitHub/main, baut zuerst eine neue venv, prüft die vorhandene Config,
 sichert Config/Auth/Eventdaten und startet den Dienst mit der neuen Laufzeit.
@@ -1184,3 +1190,7 @@ OBS-/LPE-Integration. Implementiert sind manuelle Eingabe und Import/Export nati
 LiveScore-JSON-Dateien. CSV, Fremdformate und externe Turnieradapter sind weiterhin
 **nicht implementiert**. Tournify ist keine Laufzeitabhängigkeit. Event-Löschen,
 Archivierung, Suche und mehrere gleichzeitig aktive Veranstaltungen sind nicht enthalten.
+
+## Lizenz
+
+Copyright 2026 Toralf Richter. Der eigene Code und die eigene Dokumentation sind unter der [Apache License 2.0](LICENSE) veröffentlicht. Fremdkomponenten behalten ihre jeweiligen Lizenzen.

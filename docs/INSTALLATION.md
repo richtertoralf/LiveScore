@@ -18,37 +18,26 @@ GitHub-Zugriff für Download-Installation und Remote-Upgrades; der laufende
 Veranstaltungsbetrieb ist offline möglich. Paketdownload-Fehler vor dem Umschalten
 lassen die alte Laufzeit bestehen.
 
-## GitHub-Zugang (privates Repository)
+## GitHub-Zugang (öffentliches Repository)
 
-`richtertoralf/LiveScore` ist privat. Benötigt werden ein GitHub-Username und ein
-Token mit **Leserecht auf das Repository** (Fine-grained Token mit
-„Contents: Read-only“ oder klassischer Token mit `repo`). Da auf wechselnden Rechnern
-installiert wird, **speichert LiveScore keine Zugangsdaten**.
+`richtertoralf/LiveScore` ist öffentlich. Download-Installation und Remote-Upgrades
+benötigen weder GitHub-Konto noch Token. `livescore --install` und
+`livescore --upgrade` ohne `--source` klonen `main` per HTTPS ohne interaktive
+Anmeldung. Credential-Helper und Passwortabfragen sind für diesen Download deaktiviert.
+Das temporäre Download-Verzeichnis unter `/opt/livescore/.download-*` wird in jedem
+Fall entfernt. Bei Git-Fehlern wird der Exitcode gemeldet.
 
-`livescore --install` und `livescore --upgrade` ohne `--source` fragen bei jedem
-Aufruf interaktiv `GitHub-Username` und `GitHub-Token` ab (Token unsichtbar per
-`getpass`). Der Klon läuft per HTTPS mit `git -c credential.helper= clone`, damit
-kein Credential-Helper den Token ablegt. Die Werte gelangen nur als
-Umgebungsvariablen an den git-Prozess und werden über ein temporäres
-`GIT_ASKPASS`-Hilfsskript abgefragt, das danach gelöscht wird; der Token steht nie
-in der URL, in Kommandozeilenargumenten oder Fehlermeldungen. `GIT_TERMINAL_PROMPT=0`
-bleibt gesetzt, Git fragt also nicht selbst nach. Das temporäre Download-Verzeichnis
-unter `/opt/livescore/.download-*` wird in jedem Fall entfernt.
-
-Bei abgelehntem Zugriff (git-Exitcode 128) erscheint:
-„Anmeldung fehlgeschlagen – Username/Token prüfen, Token braucht Leserecht auf
-richtertoralf/LiveScore“. Andere Git-Fehler melden nur ihren Exitcode; Gits eigene
-Ausgabe darüber (z. B. Netzwerkfehler) enthält keine Zugangsdaten. Ob Installation
-bzw. Upgrade überhaupt möglich ist, wird vor der Abfrage geprüft.
+Ältere installierte Stände können noch nach Zugangsdaten fragen. Für das erste
+Upgrade dieser Stände einen aktuellen öffentlichen Checkout klonen und darin
+`sudo ./upgrade.sh` ausführen. Danach verwendet auch `sudo livescore --upgrade`
+den Download ohne Anmeldung.
 
 ## Erstinstallation
 
-Aus einem Checkout: Beim ersten Klonen fragt Git selbst nach Username und Token
-(Token als Passwort eingeben). `-c credential.helper=` verhindert auch hier, dass
-ein eventuell konfigurierter Helper den Token speichert.
+Aus einem öffentlichen Checkout ohne GitHub-Anmeldung:
 
 ```sh
-git -c credential.helper= clone https://github.com/richtertoralf/LiveScore.git
+git clone https://github.com/richtertoralf/LiveScore.git
 cd LiveScore
 sudo ./install.sh
 livescore --version
@@ -56,8 +45,7 @@ systemctl status livescore
 ```
 
 `install.sh` installiert den lokalen Checkout ohne weitere Abfrage. Alternativ lädt
-`sudo ./bin/livescore --install` den aktuellen Stand von GitHub/main mit der oben
-beschriebenen Username-/Token-Abfrage.
+`sudo ./bin/livescore --install` den aktuellen Stand von GitHub/main ohne Anmeldung.
 
 | Pfad | Inhalt |
 |---|---|
@@ -161,10 +149,10 @@ sudo livescore --upgrade
 sudo livescore --upgrade --source /pfad/zum/LiveScore-Checkout
 ```
 
-Das Upgrade fragt GitHub-Username und Token ab (siehe
-[GitHub-Zugang](#github-zugang-privates-repository)) und lädt `main` aus dem festen
-GitHub-Repository in ein temporäres Verzeichnis innerhalb der Installation.
-Mit `--source` entfällt die Abfrage. Es führt keinen Git-Pull in lokalen
+Das Upgrade lädt `main` aus dem festen öffentlichen GitHub-Repository ohne
+Anmeldung in ein temporäres Verzeichnis innerhalb der Installation
+(siehe [GitHub-Zugang](#github-zugang-öffentliches-repository)).
+Mit `--source` wird stattdessen ein lokaler Checkout verwendet. Es führt keinen Git-Pull in lokalen
 Betreiberdaten aus und benötigt keinen Git-Checkout in der installierten Laufzeit.
 Es kann auch einen ergänzten Stand derselben Versionsnummer installieren;
 Versionsrückschritte werden abgewiesen.
@@ -247,9 +235,9 @@ startet ausschließlich eigene Loopback-Prozesse und prüft Fresh-Seed, geänder
 Admin-Passwort, Live-Score/Fouls, Upgrade, Restart, Reinstall-Abweisung,
 Uninstall-Datenerhalt und Purge. Unit-Tests ergänzen Schreibfehler, Rollback,
 Deployment-Lock, Fremdpfadschutz und Seed-Grenzfälle sowie mit einem Fake-`git`
-die Zugangsdatenübergabe per `GIT_ASKPASS`, das Löschen von Hilfsskript und
-Download-Verzeichnis und tokenfreie Fehlermeldungen. `tests/deployment_smoke.py
---remote-upgrade` fragt entsprechend interaktiv nach Username und Token. Browser-Smokes prüfen die
+den öffentlichen Download ohne Passwortabfrage, Fehlerbehandlung und das Löschen
+des Download-Verzeichnisses. `tests/deployment_smoke.py --remote-upgrade` prüft den
+Download von GitHub/main ohne Anmeldung. Browser-Smokes prüfen die
 Version auf allen fünf Seiten und EN/DE/CS sowie die bisherigen Bedienabläufe.
 
 Auf codex-dev werden diese Tests nur unter `.test-artifacts/` ausgeführt.

@@ -3,7 +3,6 @@
 import argparse
 from contextlib import contextmanager
 import fcntl
-import getpass
 import json
 import os
 from pathlib import Path
@@ -19,19 +18,10 @@ from urllib.request import urlopen
 from uuid import uuid4
 
 REPOSITORY = 'https://github.com/richtertoralf/LiveScore.git'
-AUTH_FAILED = ('Anmeldung fehlgeschlagen – Username/Token prüfen, '
-               'Token braucht Leserecht auf richtertoralf/LiveScore')
-# Liest die Zugangsdaten nur aus der Umgebung des git-Subprozesses; das Skript selbst enthält nichts Geheimes.
-ASKPASS = '''#!/bin/sh
-case "$1" in
-  Username*) printf '%s\\n' "$LIVESCORE_GIT_USERNAME" ;;
-  *) printf '%s\\n' "$LIVESCORE_GIT_TOKEN" ;;
-esac
-'''
 UNIT = 'livescore.service'
 MARKER = '.livescore-managed'
 RUNTIME = ('livescore', 'static', 'bin', 'tools', 'systemd', 'imports', 'examples', 'docs')
-FILES = ('VERSION', 'requirements.txt', 'install.sh', 'upgrade.sh', 'uninstall.sh', 'README.md')
+FILES = ('VERSION', 'requirements.txt', 'install.sh', 'upgrade.sh', 'uninstall.sh', 'README.md', 'LICENSE')
 
 
 def fail(message):
@@ -63,27 +53,14 @@ def version(root):
     return value
 
 
-def clone(target, ask=input, ask_secret=getpass.getpass):
-    """Privates Repository per HTTPS klonen; Username/Token bei jedem Aufruf abfragen, nichts speichern."""
-    username = ask('GitHub-Username: ').strip()
-    token = ask_secret('GitHub-Token (Eingabe unsichtbar): ').strip()
-    if not username or not token:
-        fail('GitHub-Username und Token sind erforderlich.')
-    handle, askpass = tempfile.mkstemp(prefix='.askpass-', dir=Path(target).parent)
-    try:
-        with os.fdopen(handle, 'w') as file:
-            file.write(ASKPASS)
-        os.chmod(askpass, 0o700)
-        # Token nur als Env-Variable des Subprozesses, nie in URL oder Argumenten;
-        # ein leerer credential.helper verhindert jede Speicherung durch Git.
-        env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_ASKPASS=askpass,
-                   LIVESCORE_GIT_USERNAME=username, LIVESCORE_GIT_TOKEN=token)
-        result = subprocess.run(['git', '-c', 'credential.helper=', 'clone', '--depth', '1', '--branch', 'main',
-                                 '--', REPOSITORY, str(target)], env=env, check=False)
-    finally:
-        Path(askpass).unlink(missing_ok=True)
-    if result.returncode == 128:
-        fail(AUTH_FAILED)
+def clone(target):
+    """Clone the public repository without interactive authentication."""
+    env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_ASKPASS='/bin/false',
+               SSH_ASKPASS='/bin/false')
+    for name in ('LIVESCORE_GIT_USERNAME', 'LIVESCORE_GIT_TOKEN'):
+        env.pop(name, None)
+    result = subprocess.run(['git', '-c', 'credential.helper=', 'clone', '--depth', '1', '--branch', 'main',
+                             '--', REPOSITORY, str(target)], env=env, check=False)
     if result.returncode:
         fail(f'GitHub-Download fehlgeschlagen (git-Exitcode {result.returncode}).')
 
@@ -375,7 +352,7 @@ class Deployment:
 def main():
     parser = argparse.ArgumentParser(description='LiveScore Linux installation and upgrade')
     parser.add_argument('operation', choices=('install', 'upgrade', 'uninstall'))
-    parser.add_argument('--source', type=Path, help='lokaler Quellstand; Default: GitHub/main mit Username/Token-Abfrage')
+    parser.add_argument('--source', type=Path, help='lokaler Quellstand; Default: öffentliches GitHub/main ohne Anmeldung')
     metadata = Path(__file__).resolve().parents[1] / 'installation.json'
     staging_default = json.loads(metadata.read_text()).get('staging_root') if metadata.exists() else None
     parser.add_argument('--staging-root', type=Path, default=staging_default,

@@ -28,6 +28,28 @@ startet keinen Server und verändert keine Konfiguration oder Veranstaltungsdate
 
 **Technologien:** Python und FastAPI stellen die HTTP-API und WebSocket-Synchronisation bereit. Die Oberfläche verwendet HTML, CSS und JavaScript; Veranstaltungsdaten werden lokal als JSON gespeichert. Nach der Installation funktioniert die Anwendung ohne Internetverbindung.
 
+## Entstehung und erster Live-Einsatz
+
+LiveScore wurde für das Blindenfußballturnier „13th Cup of Central Europe Cities
+2026“ am **3. und 4. Oktober 2026** entwickelt und dort erstmals live getestet.
+Für die Turnierverwaltung und Ergebnisauswertung kam [Tournify](https://tournifyapp.com/)
+zum Einsatz. Für die TV- und Livestreamproduktion wurde zusätzlich eine Schnittstelle
+benötigt, über die Grafiksoftware die aktuellen Spielstände übernehmen konnte.
+Tournify bietet laut seiner [offiziellen Hilfe](https://help.tournifyapp.com/en/articles/9128295-faq-presentation)
+derzeit keine öffentliche API an (geprüft am 09.10.2026).
+
+LiveScore entstand, damit Kampfrichter die Spielstände während der Spiele live
+pflegen und diese Daten über eine eigene HTTP-API für Grafikoverlays bereitstehen.
+Die Turnierauswertung blieb bei Tournify; LiveScore ergänzte die laufende Erfassung
+und Datenbereitstellung für die Produktion. Eine automatische Synchronisation mit
+Tournify ist nicht implementiert.
+
+Die mitgelieferten JSON-Dateien [imports/prague-2026.json](imports/prague-2026.json)
+und [examples/prague-2026.json](examples/prague-2026.json) basieren auf den echten
+Veranstaltungsdaten und dem Spielplan dieses ersten Einsatzes. Sie dienen als
+Beispiel- und Testdaten mit vorbereitetem Ausgangszustand, nicht als Archiv der
+tatsächlich erzielten Turnierergebnisse.
+
 ## Anbindung anderer Anwendungen
 
 LiveScore stellt Spielstände und weitere Spieldaten als JSON über die HTTP-API
@@ -457,6 +479,9 @@ Weitere historische Listener und Projektmuster stehen in
 [docs/REFERENZEN.md](docs/REFERENZEN.md).
 
 ## Beispielveranstaltung
+
+Die Beispieldaten stammen aus dem ersten Live-Einsatz; der Hintergrund steht unter
+[Entstehung und erster Live-Einsatz](#entstehung-und-erster-live-einsatz).
 
 `imports/prague-2026.json` enthält den bereitgestellten echten Spielplan des
 „13th Cup of Central Europe Cities 2026“: **6 Teilnehmer, 6 Referees, 14 Spiele**,

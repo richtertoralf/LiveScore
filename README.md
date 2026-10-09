@@ -28,6 +28,35 @@ startet keinen Server und verändert keine Konfiguration oder Veranstaltungsdate
 
 **Technologien:** Python und FastAPI stellen die HTTP-API und WebSocket-Synchronisation bereit. Die Oberfläche verwendet HTML, CSS und JavaScript; Veranstaltungsdaten werden lokal als JSON gespeichert. Nach der Installation funktioniert die Anwendung ohne Internetverbindung.
 
+## Anbindung anderer Anwendungen
+
+LiveScore stellt Spielstände und weitere Spieldaten als JSON über die HTTP-API
+`GET /api/v1/live` bereit. Jede Anwendung, die diese API abfragen und die Antwort
+auswerten kann, kann die Daten übernehmen – beispielsweise für eine Anzeigetafel,
+ein Dashboard oder ein Grafikoverlay in einer TV- oder Livestreamproduktion.
+Die verwendende Anwendung ordnet die Daten ihren eigenen Anzeigefeldern zu und
+übernimmt die Darstellung.
+
+Die hier gelegentlich erwähnte **gfx-engine** ist ein eigenes, nicht öffentliches
+Tool des Autors zum Erstellen von Grafikoverlays für TV- und Livestreamproduktionen.
+Sie ist ein Beispiel für die Art von Anwendung, die LiveScore-Daten nutzen kann. **LiveScore
+funktioniert eigenständig; gfx-engine ist für Betrieb und API-Nutzung nicht
+erforderlich.** Für andere Anwendungen gilt dieselbe dokumentierte API.
+
+Ein typischer Datenfluss ist:
+
+```text
+Bediener erfasst Spielstand in LiveScore
+    → andere Anwendung fragt /api/v1/live ab und wertet die JSON-Daten aus
+    → andere Anwendung zeigt Spielstand an oder erstellt ein Grafikoverlay
+```
+
+Eine Anwendung kann den aktuellen Zustand beispielsweise einmal pro Sekunde
+abrufen. Der Endpunkt liefert unter anderem Teilnehmer, Spielstand und die bereits
+zugeordneten Seiten `left` und `right`. Die Antwort und die Bedeutung ihrer Felder
+sind im Abschnitt [HTTP- und WebSocket-API](#http--und-websocket-api) beschrieben. LiveScore erstellt selbst keine
+Grafikoverlays und richtet keine Verbindung zu einer Grafiksoftware automatisch ein.
+
 ## Installation und Start
 
 ### Linux-Dienst installieren
@@ -115,7 +144,9 @@ Veranstaltungen: **http://localhost:8730/events** ·
 Bedienung: **http://localhost:8730/** · Konfiguration:
 **http://localhost:8730/config** · API: **http://localhost:8730/api/v1/live**.
 Im Veranstaltungsnetz `localhost` durch die Serveradresse ersetzen, beispielsweise
-`http://10.77.0.108:8730/` auf codex-dev, solange LiveScore dort gestartet ist.
+`http://192.168.1.50:8730/`, wenn dies die IP-Adresse des LiveScore-Rechners ist.
+`localhost` bezeichnet immer den Rechner, auf dem der Browser oder die abfragende
+Anwendung läuft; von einem anderen Rechner aus ist die Adresse des LiveScore-Servers nötig.
 
 Dependencies müssen einmal installiert werden; die laufende Anwendung und die
 Browseroberfläche benötigen keine externen Ressourcen. Alle CSS-/JS-Dateien liegen
@@ -360,8 +391,9 @@ CSRF-Header; die Antwort meldet bei eigener Änderung `reauthenticate: true`.
 curl --fail http://HOST:8730/api/v1/live
 ```
 
-Die GFX benötigt ausschließlich die URL; keine Anmeldung, keine Cookies und
-keine Zugangsdaten. Der Endpoint liefert den bestehenden aufbereiteten Live-State
+Eine abfragende Anwendung benötigt für diesen lesenden Endpunkt ausschließlich
+die URL; keine Anmeldung, keine Cookies und keine Zugangsdaten. `HOST` steht dabei
+für den Rechnernamen oder die IP-Adresse des LiveScore-Servers. Der Endpoint liefert den bestehenden aufbereiteten Live-State
 mit Score, Seiten, Nationen, Officials samt Funktion, aktuellen Countern,
 Spielperiode, Turnierphase und Runde. Er kann keine Daten ändern.
 Alle anderen fachlichen GET-APIs, Exporte, sämtliche Mutationen und der WebSocket
@@ -391,14 +423,37 @@ auch die Proxy-/Backend-Verbindung absichern. Für lokale HTTP-Entwicklung bleib
 `secure_cookie: false` nötig. Es wurden keine Proxy-, Firewall-, Zertifikats-
 oder systemweiten Serviceänderungen vorgenommen. TLS richtet der Betreiber ein.
 
-### Warum Port 8730?
+### Adresse und Port: Warum 8730?
 
-Die lesende Bestandsaufnahme auf codex-dev am 28./29.09.2026 ergab unter anderem
-aktive Listener auf **8080** (MediaMTX Monitor) und **8720** (GFX-Engine).
-**8081** ist in WinLaufen-Web und Richter Stream Pages vorgesehen, **8090** für
-die WinLaufen-Bridge. **8730** war frei und ist in den geprüften Konfigurationen
-nicht reserviert. Es ist vollständig konfigurierbar.
-Weitere Listener und die übernommenen Projektmuster stehen in
+Ein Port bestimmt, welcher Netzwerkdienst auf einem Rechner angesprochen wird.
+Bei `http://192.168.1.50:8730/api/v1/live` ist `192.168.1.50` die beispielhafte
+Serveradresse, `8730` der LiveScore-Port und `/api/v1/live` der Pfad zur Live-API.
+**Browseroberfläche und HTTP-API verwenden denselben Port.** Es gibt keinen
+zusätzlichen Port nur für Grafiksoftware oder andere API-Nutzer.
+
+**8730 ist der konfigurierbare Standardport von LiveScore.** Er wurde gewählt,
+um Konflikte mit anderen Diensten in der damaligen Entwicklungsumgebung zu
+vermeiden. Die Bestandsaufnahme auf dem Entwicklungsrechner des Autors am
+28./29.09.2026 ergab folgende lokale Belegungen und Planungen:
+
+| Port | Verwendung in dieser Entwicklungsumgebung |
+|---|---|
+| 8080 | MediaMTX Monitor, eine Überwachungsoberfläche für den Streamingserver |
+| 8081 | Für WinLaufen-Web und Richter Stream Pages vorgesehene Weboberflächen |
+| 8090 | Für die WinLaufen-Bridge vorgesehener Dienst zur Weitergabe von Zeitnahmedaten |
+| 8720 | gfx-engine, das private Werkzeug des Autors zum Erstellen von Grafikoverlays |
+| 8730 | Für LiveScore frei und in den geprüften Konfigurationen nicht reserviert |
+
+Diese Belegungen beschreiben die Umgebung des Autors; sie sind keine allgemeinen
+Portstandards und keine Voraussetzung für LiveScore. Auf dem eigenen Rechner muss
+der gewählte Port frei sein. Er lässt sich über `port` in
+`config/livescore.yml` beziehungsweise bei einer Installation in
+`/etc/livescore/livescore.yml` ändern. Danach LiveScore neu starten und die URLs
+im Browser sowie in abfragenden Anwendungen anpassen. Bei einem HTTPS-Reverse-Proxy
+verwenden diese Anwendungen dessen öffentliche URL; `8730` kann als interner
+LiveScore-Port bestehen bleiben.
+
+Weitere historische Listener und Projektmuster stehen in
 [docs/REFERENZEN.md](docs/REFERENZEN.md).
 
 ## Beispielveranstaltung
@@ -925,7 +980,7 @@ zusätzlich die gesamte `referees`-Liste; dort und in `/matches` bleiben
 `period` nennt den aktuellen Abschnitt, bereits ab `scheduled`.
 `left/right.counters` liefern nur die aktuellen Werte; `counter_states` enthält
 je Counter `normal`, `warning` oder `critical` (Critical hat Vorrang).
-Ohne konfigurierten Counter sind beide Objekte leer. GFX muss keine Periodenhistorie
+Ohne konfigurierten Counter sind beide Objekte leer. Eine abfragende Anwendung muss keine Periodenhistorie
 auswerten. Das gesamte Profil und die Historie stehen im Tournament-State bzw.
 Export zur Verfügung.
 
@@ -996,8 +1051,8 @@ nicht abgeleitet.
   Vertrag `""`, `officials` ist `[]`.
 - *Gültiger Wert:* auch `0` ist ein echter Wert, z. B. `counters.team_fouls: 0`.
 
-Ländercodes bleiben **ISO 3166-1 Alpha-2** (`CZ`, `DE`, `KZ`, `GR`), wie sie die
-GFX-Engine für ihre Flaggendateien erwartet. Spielpläne mit IOC-/FIFA-Kürzeln müssen
+Ländercodes sind **ISO 3166-1 Alpha-2** (`CZ`, `DE`, `KZ`, `GR`). Anwendungen können
+sie beispielsweise zur Auswahl passender Länderflaggen verwenden. Spielpläne mit IOC-/FIFA-Kürzeln müssen
 bei der Erfassung umgesetzt werden: `CZE → CZ`, `GER → DE`, `KAZ → KZ`, `GRE → GR`.
 `GER` und `GRE` sind **keine** ISO-Alpha-3-Codes (dort `DEU`/`GRC`); LiveScore nimmt
 drei Buchstaben deshalb nicht an und rät keine Nation. Die Nation gehört zum
@@ -1016,8 +1071,10 @@ beziehen sich immer auf die **aktive Veranstaltung**. Ohne Auswahl bleibt `live`
 `idle`, die Match-/Actionlog-Listen sind leer. `/api/v1/events` bleibt das Actionlog,
 kein Veranstaltungskatalog. Die externe Live-Revision ist weiterhin eine
 **Event-Revision**, kein globaler Änderungszähler; nach Wechsel kann sie sinken.
-GFX kann diesen Endpunkt beispielsweise einmal pro Sekunde pollen und benötigt
-keine Sport-, Turnier- oder Seitenwechsellogik. HTTP-Antworten werden mit
+Eine abfragende Anwendung kann diesen Endpunkt beispielsweise einmal pro Sekunde
+abrufen (Polling). LiveScore liefert die Zuordnung zu `left` und `right` sowie den
+Spielzustand bereits aufbereitet; die Anwendung muss einen Seitenwechsel nicht
+selbst aus dem Spielverlauf ableiten. HTTP-Antworten werden mit
 `Cache-Control: no-store` geliefert.
 
 ### Bedien-API

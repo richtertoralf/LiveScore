@@ -98,7 +98,8 @@ def live_view(state):
     if match is None:
         return result
     profile = state.event.sport_profile if state.event else None
-    result.update(status=match.status, match_id=match.id, period=match.period,
+    # Legacy paused states remain editable; the live contract describes an ongoing match.
+    result.update(status="live" if match.status == "paused" else match.status, match_id=match.id, period=match.period,
                   play_area=next(a.model_dump() for a in state.play_areas if a.id == match.play_area_id),
                   period_info=period_info(match, profile),
                   stage=term(match.stage, match.stage_label), round=term(match.round, match.round_label))
@@ -336,9 +337,8 @@ class Service:
             match.intermission = False
             event["type"] = "match_finished"
         elif operation == "reopen":
-            # Korrektur eines versehentlichen Spielendes: Score, Seiten und Abschnitt bleiben,
-            # das Spiel wird bewusst in PAUSE fortgesetzt.
-            match.status = "paused"
+            # Wiederöffnen erhält die Wettkampfdaten und benötigt keinen weiteren Resume-Schritt.
+            match.status = "live"
             event["type"] = "match_reopened"
         if operation not in ("score", "counter"):
             match.control_revision += 1

@@ -47,7 +47,7 @@ Ohne ausgewähltes Spiel: `status: "idle"`, `period`, `period_info`, `stage`, `r
 `null`. Ein bestätigtes Ergebnis bleibt als `finished` sichtbar, bis ein anderes
 Spiel ausgewählt wird. Wird ein beendetes Spiel erneut ausgewählt, liefert die API
 dieses Spiel mit `finished` und seinem Endstand; nach **Spiel wieder öffnen** meldet
-sie `paused`. Fehlende Kurznamen erscheinen als leere Zeichenfolge.
+sie `live`. Fehlende Kurznamen erscheinen als leere Zeichenfolge.
 `officials` enthält die aufgelösten Referee-Objekte des aktuellen Matches, bereits
 ab `scheduled`. Ohne Match oder ohne Officials ist es `[]`. `/tournament` enthält
 zusätzlich die gesamte `referees`-Liste; dort und in `/matches` bleiben
@@ -67,7 +67,7 @@ Die folgenden Metadaten stehen ab `scheduled` bereit; bei `idle` sind
 | Feld | Inhalt |
 |---|---|
 | `period_info.number` | identisch mit `period` |
-| `period_info.intermission` | `true` während einer ausdrücklich gesetzten Pause zwischen zwei Abschnitten (Halbzeitpause) |
+| `period_info.intermission` | `true` während einer ausdrücklich gesetzten Pause zwischen zwei Wettkampfabschnitten |
 | `period_info.code` | stabiler Code, siehe unten |
 | `period_info.label_en` | englisches Label oder `null` |
 | `stage` | Turnierphase: `code`, `name` (Originaltext), `label_en`; `null` ohne Angabe |
@@ -90,7 +90,36 @@ Ein **Halbzeit-Profil** liegt vor, wenn `sport_profile.periods` genau 2 ist und
 `period_label` (ohne Groß-/Kleinschreibung) `Halbzeit`, `Half` oder `Poločas` lautet.
 Das ist bei Prag der Fall. Boxen, Showdown oder Profile mit „Runde“/„Satz“
 erhalten keine Fußball-Labels, sondern nur neutrale Codes. `paused` ist eine
-normale Unterbrechung und erzeugt **nicht** „Half-time“.
+Legacy-Status und erzeugt **nicht** „Half-time“. Diese bisherigen Halbzeit-Codes
+bleiben für externe Anwendungen erhalten. Die Bedienoberfläche leitet ihre
+Abschnittsbegriffe ausschließlich aus dem Sportprofil ab, nicht aus diesen Codes.
+
+### Kompatibilität: Abschnittspausen und Wiederöffnen (Issue #5)
+
+Das JSON-Format bleibt Schema-Version 1. Feldnamen und Typen der Live-API bleiben
+erhalten; es kommen keine neuen Felder hinzu. Die bisherigen `period_info.code`-
+und `label_en`-Zuordnungen bleiben unverändert. Anzahl und Abschnittsbezeichnung
+stehen weiterhin in `event.sport_profile` des Tournament-Snapshots beziehungsweise Exports.
+
+Bewusste Verhaltensänderungen:
+
+- Wiederöffnen führt unmittelbar von `finished` nach `live`.
+- `GET /api/v1/live` sowie das `live`-Objekt in HTTP-/WebSocket-Snapshots liefern
+  für alte interne `paused`-Stände ebenfalls `status: "live"`. Der Wettkampf ist
+  laufend; eine Abschnittspause wird ausschließlich durch
+  `period_info.intermission: true` angezeigt. `status: "live"` allein bedeutet
+  deshalb nicht, dass gerade ein Abschnitt aktiv ausgetragen wird.
+- Rohe Match-Daten unter `/matches`, im Tournament-State und im Export behalten
+  einen vorhandenen `paused`-Wert. Es wird keine Bestandsdatei beim Lesen umgeschrieben.
+- `POST /api/v1/live/pause` und `/resume` bleiben mit ihren bisherigen Validierungen
+  und internen Übergängen verfügbar, sind in OpenAPI aber als veraltet markiert.
+  Sie setzen keine Abschnittspause und haben keine Schaltfläche mehr in der GUI.
+
+Externe Anwendungen, die `paused` besonders darstellen oder nach Wiederöffnen
+automatisch `resume` senden, müssen diesen Ablauf anpassen. Anzeigen der tatsächlichen
+Abschnittspause sollen `period_info.intermission` auswerten. Score, Seiten, Counter,
+Periodennummer und Officials bleiben unverändert. Die API erlaubt weiterhin den
+direkten Wechsel zum nächsten Abschnitt; nur die GUI führt ihn über die Abschnittspause.
 
 Für `stage` und `round` gilt diese feste Zuordnung (Vergleich ohne Groß-/Kleinschreibung,
 Originaltext bleibt in `name` erhalten):
@@ -130,7 +159,7 @@ nicht abgeleitet.
 Seitenwechsel dem Teilnehmer zugeordnet. [Format und Erfassung](DATA_MODEL.md#veranstaltungsdatei).
 
 Diese Felder stehen auch im `live`-Objekt des WebSocket-/Tournament-Snapshots.
-Jede Änderung von Halbzeitpause, Periode oder Spielplan erhöht `revision`, auch ohne
+Jede Änderung von Abschnittspause, Periode oder Spielplan erhöht `revision`, auch ohne
 Scoreänderung; Pollende Clients sehen sie beim nächsten Abruf.
 
 Alle vier GET-Endpunkte (`live`, `tournament`, `matches`, `events`)
@@ -166,12 +195,12 @@ Interaktive OpenAPI-Dokumentation liegt unter `/docs`, das Schema unter
 | `POST /api/v1/live/counter` | +1 oder −1 für einen Teilnehmer-Counter im aktuellen Abschnitt |
 | `POST /api/v1/live/period` | bestätigter Wechsel zum nächsten Abschnitt, nur live/paused |
 | `POST /api/v1/live/intermission` | Pause zwischen Abschnitten setzen/zurücknehmen (`intermission`: true/false), nur live/paused |
-| `POST /api/v1/live/pause` | live → paused |
-| `POST /api/v1/live/resume` | paused → live |
+| `POST /api/v1/live/pause` | veraltet: intern live → paused; Live-Ausgabe bleibt live |
+| `POST /api/v1/live/resume` | veraltet: intern paused → live |
 | `POST /api/v1/live/switch-sides` | nur L/R tauschen (ready/live/paused) |
 | `POST /api/v1/live/undo` | letzte geeignete Score-Aktion zurücknehmen |
 | `POST /api/v1/live/finish` | Ergebnis bestätigen (live/paused → finished) |
-| `POST /api/v1/live/reopen` | ausgewähltes beendetes Spiel wieder öffnen (finished → paused) |
+| `POST /api/v1/live/reopen` | ausgewähltes beendetes Spiel wieder öffnen (finished → live) |
 | `WS /api/v1/ws` | initialer UI-Snapshot, weitere Snapshots, Heartbeat alle 5 Sekunden bei Leerlauf |
 
 Mutationen geben den aktuellen UI-Snapshot zurück. Spielaktionen benötigen `request_id`, `event_id`, `selection_token` und `match_id`.

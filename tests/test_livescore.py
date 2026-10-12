@@ -124,7 +124,7 @@ class APITest(unittest.TestCase):
     def test_decrement_undo_pause_resume_finish_next(self):
         self.start(); self.score(); self.score(); self.score(delta=-1)
         self.action('pause')
-        self.assertEqual(self.state()['live']['status'],'paused')
+        self.assertEqual(self.state()['live']['status'],'live')
         self.action('undo')
         self.assertEqual(self.state()['live']['left']['score'],2)
         self.action('resume'); self.action('finish')
@@ -140,7 +140,7 @@ class APITest(unittest.TestCase):
         self.action('switch-sides'); self.action('finish')
         self.assertFalse(self.state()['can_undo'])
         state = self.action('reopen')
-        self.assertEqual(state['live']['status'],'paused')
+        self.assertEqual(state['live']['status'],'live')
         self.assertEqual(state['matches'][0]['scores'],{'a':2,'b':1})
         self.assertEqual((state['live']['left']['id'],state['live']['left']['score']),('b',1))
         self.assertEqual((state['live']['right']['id'],state['live']['right']['score']),('a',2))
@@ -148,10 +148,10 @@ class APITest(unittest.TestCase):
         # Nach einem Neustart bleibt der wieder geöffnete Zustand erhalten.
         self.client.__exit__(None,None,None)
         self.app = create_app(auth_config=AuthConfig(enabled=False), data_file=self.legacy_path); self.client = TestClient(self.app).__enter__()
-        self.assertEqual(self.client.get('/api/v1/live').json()['status'],'paused')
+        self.assertEqual(self.client.get('/api/v1/live').json()['status'],'live')
         self.action('undo')
         self.assertEqual(self.state()['matches'][0]['scores'],{'a':2,'b':0})
-        self.action('resume'); self.score('L')  # b steht nach dem Seitenwechsel links.
+        self.score('L')  # b steht nach dem Seitenwechsel links.
         self.action('finish')
         self.assertEqual(self.state()['matches'][0]['scores'],{'a':2,'b':1})
         event_types = [e['type'] for e in self.client.get('/api/v1/events').json()]
@@ -180,7 +180,7 @@ class APITest(unittest.TestCase):
         # Ein beendetes Spiel darf erneut ausgewählt und dann wieder geöffnet werden.
         state = self.action('select',match_id='m1')
         self.assertEqual((state['live']['status'],state['live']['match_id']),('finished','m1'))
-        self.assertEqual(self.action('reopen')['live']['status'],'paused')
+        self.assertEqual(self.action('reopen')['live']['status'],'live')
         self.assertEqual(self.request('live/select',match_id='m2').status_code,409)
         self.action('finish')
         self.action('select',match_id='m2'); self.action('prepare',match_id='m2',participant_1='a',participant_2='c',side_l='a',side_r='c')

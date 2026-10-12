@@ -40,3 +40,10 @@ class TranslationTest(unittest.TestCase):
         for lang in LANGUAGES:
             missing = {key: source for key, source in texts.items() if key not in available[lang]}
             self.assertEqual(missing, {}, lang)
+
+    def test_profile_vocabulary_and_period_templates_exist_in_all_languages(self):
+        keys = {'Halbzeit', 'Runde', 'Satz', 'Abschnitt', 'Halbzeitpause',
+                'Rundenpause', 'Satzpause', 'Pause zwischen Abschnitten',
+                'next_period', 'period_return'}
+        for lang, available in translations().items():
+            self.assertLessEqual(keys, available, lang)

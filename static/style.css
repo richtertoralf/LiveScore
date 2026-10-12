@@ -76,8 +76,9 @@ p {
   border-radius:7px;
   padding:8px 14px;
 }
-.status.paused {
+.status.intermission {
   background:#825319;
+  text-transform:uppercase;
 }
 .status.finished,.status.ready,.status.scheduled {
   background:#304962;
@@ -113,6 +114,9 @@ p {
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:12px;
+}
+.actions > :only-child {
+  grid-column:1 / -1;
 }
 .stack {
   display:grid;
@@ -325,7 +329,7 @@ input[type=file] { max-width: 100%; }
 .counter.critical .counter-notice { text-transform: uppercase; font-weight: 800; }
 .counter-actions { display: flex; gap: 8px; margin-top: 10px; }
 .counter-actions button { flex: 1; min-width: 0; padding: 10px; }
-.period-action { margin-top: 24px; }
+.period-action { margin-bottom: 12px; }
 .period-action button { width: 100%; }
 header { flex-wrap: wrap; }
 #languages { display: flex; gap: 4px; }

@@ -197,7 +197,7 @@ class LiveMetadataTest(unittest.TestCase):
         self.action('start')
         self.assertEqual(self.phase(), ('first_half', '1st half', 1, False))
         self.action('pause')
-        self.assertEqual(self.live()['status'], 'paused')
+        self.assertEqual(self.live()['status'], 'live')
         self.assertEqual(self.phase(), ('first_half', '1st half', 1, False))  # normale Pause ≠ Halbzeit
         self.action('resume')
         self.action('intermission', intermission=True)
@@ -206,10 +206,10 @@ class LiveMetadataTest(unittest.TestCase):
         self.action('intermission', intermission=False)  # Korrektur
         self.assertEqual(self.phase(), ('first_half', '1st half', 1, False))
         self.action('intermission', intermission=True); self.action('pause')
-        self.assertEqual((self.live()['status'], *self.phase()), ('paused', 'half_time', 'Half-time', 1, True))
+        self.assertEqual((self.live()['status'], *self.phase()), ('live', 'half_time', 'Half-time', 1, True))
         self.foul('bsc-praha')  # zählt weiter zur ersten Halbzeit
         self.action('period', period=2)
-        self.assertEqual((self.live()['status'], *self.phase()), ('paused', 'second_half', '2nd half', 2, False))
+        self.assertEqual((self.live()['status'], *self.phase()), ('live', 'second_half', '2nd half', 2, False))
         self.assertEqual(self.state()['matches'][0]['counters']['team_fouls']['bsc-praha'], {'1': 1, '2': 0})
         self.action('intermission', status=409, intermission=True)  # kein Abschnitt mehr danach
         self.action('resume'); self.action('finish')

@@ -37,7 +37,7 @@ function render(state) {
       if (kind === 'event') fill(kind, state.event, state);
       else fill(kind, state[def.key].find(item => item.id === form.elements.namedItem('id').value), state);
     }
-    if (def.key) $(`#list-${kind}`).innerHTML = state[def.key].map(i => `<button type="button" data-edit="${kind}" data-id="${e(i.id)}" ${kind === 'matches' && i.status !== 'scheduled' ? 'disabled' : ''}>${e(i.name || i.label || `${i.date} ${i.time.slice(0,5)} · ${i.round || i.id}`)}${i.status ? ' · ' + e(t({scheduled:'NÄCHSTES SPIEL',ready:'BEREIT',live:'LIVE',paused:'PAUSE',finished:'BEENDET'}[i.status])) : ''}</button>`).join('');
+    if (def.key) $(`#list-${kind}`).innerHTML = state[def.key].map(i => `<button type="button" data-edit="${kind}" data-id="${e(i.id)}" ${kind === 'matches' && i.status !== 'scheduled' ? 'disabled' : ''}>${e(i.name || i.label || `${i.date} ${i.time.slice(0,5)} · ${i.round || i.id}`)}${i.status ? ' · ' + e(t({scheduled:'NÄCHSTES SPIEL',ready:'BEREIT',live:'LIVE',paused:'LIVE',finished:'BEENDET'}[i.status])) : ''}</button>`).join('');
   }
 }
 function fill(kind, item, state = app.state) {

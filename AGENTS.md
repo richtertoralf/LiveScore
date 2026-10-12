@@ -76,6 +76,18 @@ Die Oberfläche darf je nach Konfiguration Begriffe wie Tor, Punkt oder Score an
 
 Sportartspezifische Regeln wie Sätze, Karten, Strafen, Torschützen, Tabellenberechnung oder automatische Turnierlogik nur auf ausdrücklichen Auftrag einführen.
 
+### Wettkampfabschnitte und Abschnittspausen
+
+- LiveScore ist ein sportartenneutrales Werkzeug zur manuellen Erfassung, keine Wettkampfregel-Engine.
+- Anzahl und Bezeichnung der Abschnitte kommen aus `sport_profile.periods` und `period_label`.
+- Halbzeiten, Runden und Sätze verwenden denselben generischen Ablauf; keine feste Anzahl von zwei Abschnitten voraussetzen.
+- In der GUI gibt es ausschließlich Pausen zwischen Abschnitten, dargestellt durch `intermission`.
+- Unterbrechungen innerhalb eines Abschnitts, etwa Verletzungen oder Time-outs, werden nicht erfasst.
+- Kein allgemeiner Pause-/Fortsetzen-Button, keine Uhr, automatische Pausendauer oder automatischer Abschnittswechsel.
+- Der nächste Abschnitt wird in der GUI während der Abschnittspause nach Bestätigung gestartet; eine versehentliche Pause lässt sich ohne Abschnittswechsel aufheben.
+- Seitenwechsel ist unabhängig vom Abschnittswechsel. Score, Counter und Undo bleiben in der Abschnittspause bedienbar.
+- Wiederöffnen eines versehentlich beendeten Wettkampfs führt direkt zu `live`, mit unveränderten Scores, Seiten, Abschnitt und Countern.
+
 ### Externe Turniersysteme sind keine Laufzeitabhängigkeit
 
 Spielpläne können später aus Tournify, CSV, JSON oder anderen Quellen übernommen werden.
@@ -101,7 +113,7 @@ Spiel starten
     ↓
 Score erfassen
     ↓
-Pause / Fortsetzen / Seitenwechsel
+bei Bedarf Abschnittspause / nächster Abschnitt / Seitenwechsel
     ↓
 Spiel beenden und Ergebnis bestätigen
     ↓
@@ -119,7 +131,7 @@ Deshalb:
 - Score-Klicks nicht mit Bestätigungsdialogen bremsen
 - `UNDO` deutlich sichtbar halten
 - kritische Aktionen wie `Spiel Ende` gegen versehentliche Bedienung schützen
-- den aktuellen Zustand `LIVE` beziehungsweise `PAUSE` deutlich anzeigen
+- `LIVE` und die jeweilige Abschnittspause deutlich anzeigen
 
 Komplexität darf nicht vom Backend in die Bedienoberfläche verschoben werden.
 
@@ -135,13 +147,18 @@ paused
 finished
 ```
 
+`paused` bleibt als Legacy-Status für Bestandsdaten und ältere `pause`-/`resume`-
+API-Clients erhalten. Die GUI erzeugt ihn nicht. Die aufbereitete Live-Ausgabe
+stellt ihn als `live` dar; `period_info.intermission` kennzeichnet die Abschnittspause.
+Rohe Match-Daten und Exporte behalten den gespeicherten Legacy-Wert.
+
 Erlaubte Übergänge sollen explizit implementiert und getestet werden.
 
 Insbesondere:
 
 - ein nicht vorbereitetes Spiel nicht versehentlich starten
 - ein beendetes Spiel nicht stillschweigend weiter verändern
-- Pause und Fortsetzen müssen einen eindeutigen Zustand erzeugen
+- Abschnittspause und nächster Abschnitt müssen einen eindeutigen Zustand erzeugen
 - Seitenwechsel darf keine Score-Zuordnung beschädigen
 - nach Neustart muss der persistierte Zustand nachvollziehbar wiederhergestellt werden
 
@@ -294,7 +311,9 @@ Für den MVP sind insbesondere Tests für folgende Fälle wichtig:
 - Score rechts erhöhen
 - Score verringern
 - Undo
-- Pause und Fortsetzen
+- Abschnittspause, ihre Korrektur und Wechsel über mehr als zwei Abschnitte
+- Legacy-Pause und Fortsetzen über die bisherigen API-Endpunkte
+- direktes Wiederöffnen ohne Fortsetzen-Schritt
 - Seitenwechsel bei vorhandenem Score
 - Spiel beenden
 - Wechsel zum nächsten Spiel

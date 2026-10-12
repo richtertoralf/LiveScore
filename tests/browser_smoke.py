@@ -157,14 +157,19 @@ async def run(executable):
                 await foul(page_b,delta=-1); await fouls(5,0)
                 await action(page_a,'switch-sides'); await fouls(0,5); await scores(0,1)
                 await action(page_a,'switch-sides'); await fouls(5,0); await scores(1,0)
+                await expect(page_a.locator('[data-action=period-dialog]')).to_have_count(0)
+                await action(page_a,'intermission')
+                await expect(page_b.locator('.status')).to_have_text('Halbzeitpause')
+                await action(page_a,'intermission')
+                await expect(page_b.locator('.status')).to_have_text('LIVE')
+                await action(page_a,'intermission')
                 await action(page_a,'period-dialog')
                 await page_a.locator('#period-cancel').click(); await fouls(5,0)
                 # Another operator's change invalidates a pending period confirmation.
                 await action(page_a,'period-dialog'); await foul(page_b)
                 await expect(page_a.locator('#period-dialog')).not_to_be_visible()
                 await fouls(6,0)
-                await action(page_a,'pause')
-                await expect(page_b.locator('.status')).to_have_text('PAUSE')
+                await expect(page_b.locator('.status')).to_have_text('Halbzeitpause')
                 await action(page_a,'period-dialog')
                 await page_a.locator('#period-confirm').click()
                 await fouls(0,0,2); await scores(1,0)
@@ -173,7 +178,6 @@ async def run(executable):
                     await expect(page.locator('[data-action="counter"][data-side="L"][data-delta="-1"]')).to_be_disabled()
                 await asyncio.gather(foul(page_a),foul(page_b))
                 await fouls(2,0,2)
-                await action(page_a,'resume')
                 match = (await (await page_a.request.get(url+'/api/v1/tournament')).json())['matches'][0]
                 assert match['counters']['team_fouls']['bsc-praha'] == {'1':6,'2':2}
                 # Restart with both browsers still showing the active second period.
@@ -257,8 +261,7 @@ async def run(executable):
                 await expect(page_b.locator('#name-R')).to_have_text('BSC Praha')
                 await action(page_b,'score-R--1'); await scores(1,1)
                 await action(page_a,'undo'); await scores(1,2)
-                await action(page_a,'pause'); await expect(page_b.locator('.status')).to_have_text('PAUSE')
-                await action(page_b,'resume'); await expect(page_a.locator('.status')).to_have_text('LIVE')
+                await expect(page_a.locator('[data-action=pause], [data-action=resume]')).to_have_count(0)
                 # Two browser contexts send scores from the same displayed state.
                 await asyncio.gather(action(page_a,'score-L-1'),action(page_b,'score-L-1'))
                 await scores(3,2)
@@ -305,13 +308,14 @@ async def run(executable):
                 await expect(page_b.locator('.status')).to_have_text('LIVE')
                 await action(page_a,'finish-dialog'); await page_a.locator('#finish-confirm').click()
                 await expect(page_b.locator('.status')).to_have_text('BEENDET')
-                # Versehentliches Spielende: Abbrechen ändert nichts, Bestätigen öffnet in PAUSE mit gleichem Stand.
+                # Versehentliches Spielende: Abbrechen ändert nichts, Bestätigen öffnet direkt LIVE mit gleichem Stand.
                 await action(page_b,'reopen-dialog'); await page_b.locator('#reopen-cancel').click()
                 await expect(page_a.locator('.status')).to_have_text('BEENDET')
                 await action(page_b,'reopen-dialog'); await page_b.locator('#reopen-confirm').click()
-                await expect(page_a.locator('.status')).to_have_text('PAUSE')
+                await expect(page_a.locator('.status')).to_have_text('LIVE')
                 await scores(3,4)
-                await action(page_a,'resume'); await expect(page_b.locator('.status')).to_have_text('LIVE')
+                assert (await (await page_a.request.get(url+'/api/v1/live')).json())['status'] == 'live'
+                await expect(page_b.locator('[data-action=resume]')).to_have_count(0)
                 await action(page_a,'finish-dialog'); await page_a.locator('#finish-confirm').click()
                 await expect(page_b.locator('.status')).to_have_text('BEENDET')
                 await page_b.locator('[data-action=select]').click()
@@ -327,7 +331,7 @@ async def run(executable):
                 await page_b.locator('.match-item', has_text='BEENDET').click()
                 await expect(page_a.locator('.status')).to_have_text('BEENDET'); await scores(3,4)
                 await action(page_a,'reopen-dialog'); await page_a.locator('#reopen-confirm').click()
-                await expect(page_b.locator('.status')).to_have_text('PAUSE')
+                await expect(page_b.locator('.status')).to_have_text('LIVE')
                 await action(page_b,'undo'); await scores(3,3)
                 await action(page_b,'finish-dialog'); await page_b.locator('#finish-confirm').click()
                 await expect(page_a.locator('.status')).to_have_text('BEENDET')
@@ -363,7 +367,7 @@ async def run(executable):
                 assert len((await (await page_a.request.get(url+'/api/v1/event-catalog')).json())['items']) == 3
                 assert not errors, errors
                 await browser.close()
-                print('PASS: Participant-Ländercodes, Prag-Profil, Counter +/−, Warnung bei 4, Critical bei 5/6, parallele Counter in zwei Browsern, Seitenwechsel, bestätigter/abgebrochener/veralteter Periodendialog, Periodenhistorie und echter Neustart in Periode 2; Prag-Datei (6 Referees, 14 Matches mit je 3 Officials), Referee-Anlage/Bearbeitung, Officials-Auswahl, Export/Reimport vollständig; Event-Neuanlage, Dateiimport mit Preview/Kollision/Abbruch, Event-Wechsel, Config-Entwurf verworfen, Isolation; Paarungskorrektur, parallele Scores, Doppelklick, Undo, Pause, Offline/Reconnect, Reload, Ergebnisbestätigung, Spiel wieder öffnen, beendetes Spiel erneut auswählen/fortführen, Admin-Reset per Importdatei und per Zurücksetzen-Button, nächstes Spiel, curl; keine JS-Fehler.')
+                print('PASS: Participant-Ländercodes, Prag-Profil, Counter +/−, Warnung bei 4, Critical bei 5/6, parallele Counter in zwei Browsern, Seitenwechsel, bestätigter/abgebrochener/veralteter Periodendialog, Periodenhistorie und echter Neustart in Periode 2; Prag-Datei (6 Referees, 14 Matches mit je 3 Officials), Referee-Anlage/Bearbeitung, Officials-Auswahl, Export/Reimport vollständig; Event-Neuanlage, Dateiimport mit Preview/Kollision/Abbruch, Event-Wechsel, Config-Entwurf verworfen, Isolation; Paarungskorrektur, parallele Scores, Doppelklick, Undo, Abschnittspause, Offline/Reconnect, Reload, Ergebnisbestätigung, Spiel wieder öffnen, beendetes Spiel erneut auswählen/fortführen, Admin-Reset per Importdatei und per Zurücksetzen-Button, nächstes Spiel, curl; keine JS-Fehler.')
         finally:
             if process and process.poll() is None:
                 process.terminate(); process.wait(timeout=10)

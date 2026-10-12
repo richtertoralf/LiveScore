@@ -44,6 +44,7 @@ Score-Request aus `docs/API.md` mit echten API-Aufrufen.
 .venv/bin/python -m playwright install chromium
 .venv/bin/python tests/browser_smoke.py
 .venv/bin/python tests/browser_auth_smoke.py
+.venv/bin/python tests/browser_sections_smoke.py
 .venv/bin/python tests/deployment_smoke.py
 .venv/bin/python tests/auth_recovery_smoke.py
 ```
@@ -61,6 +62,11 @@ Deinstallation. Details zur [isolierten Verifikation](INSTALLATION.md#isolierte-
 Der Recovery-Smoke prüft Passwortänderung mit echtem SIGHUP und weiterlaufenden
 Live-Daten; sein systemctl-Stub kontaktiert keine Hostdienste.
 
+`browser_sections_smoke.py` prüft neun Profilvarianten in EN/DE/CS mit zwei Browsern:
+zwei Halbzeiten, drei Runden, fünf Sätze, eigene Begriffe, mehr als zwei Halbzeiten,
+einen einzelnen Abschnitt und kein Profil. Geprüft werden Abschnittspausen,
+Korrektur, Dialogabbruch, konkurrierende Änderungen und direktes Wiederöffnen.
+
 Unter Windows sind manueller Start und Dateisperren implementiert;
 die bisher dokumentierten praktischen Prüfungen erfolgten unter Linux/Chromium.
 
@@ -69,9 +75,11 @@ die bisher dokumentierten praktischen Prüfungen erfolgten unter Linux/Chromium.
 Die folgenden Dokumente beschreiben Entscheidungen beziehungsweise Vorschläge,
 keine zusätzlichen implementierten Funktionen:
 
-- [Pause-Bedienung und Wiederöffnen überarbeiten](issues/issue-remove-pause.md)
 - [Einzelnes Spiel zurücksetzen und Paarung korrigieren](issues/issue-match-reset.md)
 - [Spieluhr: Entscheidung und Zukunftsthema](issues/issue-match-clock.md)
 
 Die [historische Referenzprüfung](REFERENZEN.md) dokumentiert Projektmuster und
 die damalige Portwahl; sie ist keine Betriebsvoraussetzung.
+
+Die umgesetzte Entscheidung zu [Abschnittspausen und Wiederöffnen](issues/issue-remove-pause.md)
+beschreibt auch die Kompatibilitätsauswirkungen für ältere API-Clients.

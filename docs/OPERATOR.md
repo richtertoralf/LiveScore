@@ -34,9 +34,9 @@ Sportprofile für Abschnitte und Zähler werden per JSON oder API hinterlegt;
 einen Profil-Editor gibt es nicht. Das Format steht im [Datenmodell](DATA_MODEL.md#sportprofil).
 
 Es gibt eine aktive Veranstaltung und ein gemeinsam ausgewähltes Spiel,
-auch bei mehreren Play Areas. Ein Veranstaltungswechsel ist erst möglich,
-wenn kein Spiel vorbereitet, LIVE oder PAUSE ist. In diesen Zuständen ist
-auch die Konfiguration gesperrt. Vor dem Start kann die Vorbereitung
+auch bei mehreren Play Areas. Ein vorbereitetes oder laufendes Spiel sperrt
+Veranstaltungswechsel und Konfiguration. Das gilt auch während einer Abschnittspause.
+Vor dem Start kann die Vorbereitung
 zurückgenommen werden; nach dem Start muss das Ergebnis bestätigt werden.
 
 ## Spiel bedienen
@@ -44,12 +44,14 @@ zurückgenommen werden; nach dem Start muss das Ergebnis bestätigt werden.
 1. In der **Bedienung** ein Spiel auswählen. Die Liste ist nach Datum und Uhrzeit sortiert.
 2. **Paarung bestätigen** oder **Paarung ändern**. Zwei verschiedene bekannte
    Teilnehmer sind erforderlich. L/R prüfen und bei Bedarf **Seiten tauschen**.
-3. **Spiel starten** und Score mit **+1 / −1** erfassen. Negative Scores sind nicht möglich.
+3. Den Wettkampf starten: je nach Profil etwa **1. Halbzeit starten**, **1. Runde starten**
+   oder **1. Satz starten**, ohne Profil **Spiel starten**. Score mit **+1 / −1** erfassen.
+   Negative Scores sind nicht möglich.
 4. **UNDO** nimmt die letzte noch nicht zurückgenommene Score-Aktion dieses Spiels
    zurück, auch die eines anderen Bedieners. Das funktioniert nach Seitenwechsel,
    Reload und Serverneustart. Zähleränderungen werden nicht mit Undo zurückgenommen.
-5. **Pause / Fortsetzen** und **Seitenwechsel** wirken für alle Browser.
-   Score-Korrekturen und Undo bleiben in der Pause möglich.
+5. Bei Bedarf eine **Abschnittspause** setzen oder **Seitenwechsel** nutzen.
+   Beide wirken für alle Browser. Score-Korrekturen und Undo bleiben in der Pause möglich.
 6. **Spiel Ende** öffnet die Endstandprüfung. Erst **Ergebnis bestätigen** beendet
    das Spiel. Bei zwischenzeitlichen Änderungen durch einen anderen Bediener
    muss der neue Stand erneut geprüft werden.
@@ -61,40 +63,55 @@ vertauscht die Darstellung; Namen, Scores, Länder und Zähler bleiben beim Teil
 Wurde ein Spiel versehentlich beendet, lässt es sich mit **Spiel wieder öffnen**
 nach Bestätigung fortsetzen. Frühere Spiele sind über **Beendete Spiele anzeigen**
 erneut auswählbar, sofern kein anderes Spiel vorbereitet oder aktiv ist.
-Score, Seiten, Abschnitt und Zähler bleiben erhalten; das Spiel steht zunächst
-auf **PAUSE**. Mit **Fortsetzen** wird es wieder LIVE. Eine zuvor gesetzte
-Halbzeitpause muss gegebenenfalls neu gesetzt werden.
+Score, Seiten, Abschnitt und Zähler bleiben erhalten; der Wettkampf ist sofort
+wieder **LIVE** und bedienbar. Eine zuvor gesetzte Abschnittspause wurde durch das
+Spielende beendet und muss gegebenenfalls erneut gesetzt werden.
 
 Die Paarung lässt sich nach Spielbeginn nicht mehr ändern. Wiederöffnen hebt diese
 Sperre nicht auf. Ein Zurücksetzen einzelner Spiele ist noch nicht implementiert;
 das Zurücksetzen einer ganzen Veranstaltung ist dafür kein geeigneter Ersatz.
 
-## Halbzeiten, Abschnitte und Zähler
+## Wettkampfabschnitte, Pausen und Zähler
 
 Bei konfiguriertem Sportprofil erscheinen Abschnittssteuerung und zusätzliche
 Zähler, etwa Teamfouls. Zähler werden mit **+1 / −1** korrigiert und können nicht
 negativ werden. Warnschwellen verändern nur die Anzeige und lösen keine Sportregel
 oder Strafaktion aus.
 
-**Halbzeitpause** beziehungsweise **Pause zwischen Abschnitten** ist verfügbar,
-solange ein weiterer Abschnitt folgt. Sie lässt sich ohne Dialog setzen und mit
-**Zurück zu 1. Halbzeit** wieder aufheben. **2. Halbzeit starten** beziehungsweise
-der nächste Abschnitt verlangt eine Bestätigung und beendet die Halbzeitpause.
-Abschnitte können weder übersprungen noch zurückgeschaltet werden.
+Es gibt eine Art von Pause: **zwischen zwei Wettkampfabschnitten**. Anzahl und
+Bezeichnung kommen aus dem Sportprofil; der Ablauf ist für jede Anzahl gleich:
 
-Beim Abschnittswechsel bleiben Score, Seiten, Officials und LIVE-/PAUSE-Status
-erhalten. Zähler beginnen je nach Profil bei null oder übernehmen den bisherigen
-Wert; frühere Abschnittswerte bleiben gespeichert. Halbzeitpause, Pause/Fortsetzen
-und Seitenwechsel sind unabhängig. Auch während der Halbzeitpause sind Score,
-Zähler, Undo und Seitenwechsel bedienbar. Es gibt keine integrierte Spieluhr
-und keinen automatischen Abschnitts- oder Seitenwechsel.
+```text
+Abschnitt n → Abschnittspause → Abschnitt n+1
+```
+
+Der Pausenbutton steht neben **Seitenwechsel**, vor **Spiel Ende**. Bei bekannten
+Abschnittsbegriffen heißt er **Halbzeitpause**, **Rundenpause** oder **Satzpause**;
+Eigene Begriffe bleiben erhalten; ihr Pausenbutton heißt **Pause zwischen
+Abschnitten**. Das Statusschild zeigt die jeweilige Pause deutlich an.
+
+Erst während dieser Pause erscheint beispielsweise **2. Runde starten**.
+Der bestehende Bestätigungsdialog schützt den Abschnittswechsel. Eine versehentlich
+gesetzte Pause lässt sich mit **Zurück zu 1. Runde** aufheben; das ändert keinen
+Abschnitt. Beim letzten Abschnitt und ohne weitere konfigurierte Abschnitte gibt es
+keine Pausensteuerung. Abschnitte können weder übersprungen noch zurückgeschaltet werden.
+
+Beim Abschnittswechsel bleiben Score, Seiten und Officials erhalten. Zähler beginnen
+je nach Profil bei null oder übernehmen den bisherigen Wert; frühere Abschnittswerte
+bleiben gespeichert. Auch während einer Abschnittspause sind Score, Zähler, Undo
+und Seitenwechsel bedienbar. Es gibt keine allgemeine Pause-/Fortsetzen-Schaltfläche.
+Unterbrechungen innerhalb eines Abschnitts, etwa Verletzungen oder Time-outs, werden
+nicht erfasst. Keine Spieluhr, automatische Pausendauer oder automatischer Wechsel;
+der Bediener entscheidet über Abschnittswechsel und Wettkampfende.
 
 ## Import, Export und Zurücksetzen
 
 Unter **Veranstaltungen → JSON importieren** eine native LiveScore-Datei auswählen
 (maximal 10 MiB). Die Vorschau prüft die Datei und zeigt deren Inhalt an;
 erst **Importieren** speichert sie. Ein importierter Live- oder Pausenstand bleibt
-erhalten. Bei gleicher Veranstaltungs-ID kann der Import abgebrochen oder als
+erhalten. Ältere gespeicherte `paused`-Stände sind sofort bedienbar und werden als
+laufend angezeigt; nur `intermission` kennzeichnet eine Abschnittspause.
+Bei gleicher Veranstaltungs-ID kann der Import abgebrochen oder als
 neue Veranstaltung gespeichert werden. Ein normaler Import überschreibt nichts.
 
 **JSON exportieren** lädt den vollständigen Stand einer Veranstaltung mit Scores,
@@ -112,7 +129,7 @@ Für den Admin stehen zwei weitere Aktionen zur Verfügung:
 Beide Aktionen verlangen eine Bestätigung. Sie ersetzen **alle Spiele, Ergebnisse,
 Paarungen, Konfiguration und das Ereignisprotokoll** der betroffenen Veranstaltung.
 Bei Bedarf vorher exportieren. Für die aktive Veranstaltung sind sie gesperrt,
-solange ein Spiel vorbereitet, LIVE oder PAUSE ist. Manuell angelegte oder ältere
+solange ein Spiel vorbereitet oder laufend ist. Manuell angelegte oder ältere
 importierte Veranstaltungen ohne gespeicherte Importdatei können erst nach einem
 ausdrücklichen Ersetzen zurückgesetzt werden.
 

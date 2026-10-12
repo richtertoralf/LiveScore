@@ -207,7 +207,8 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     def add_action(operation):
         async def action(command: MatchCommand):
             return await app.state.service.apply(operation, command)
-        app.add_api_route("/api/v1/live/" + operation, action, methods=["POST"], name=operation)
+        app.add_api_route("/api/v1/live/" + operation, action, methods=["POST"], name=operation,
+                          deprecated=operation in ("pause", "resume"))
 
     @app.post("/api/v1/live/counter")
     async def counter(command: Counter):

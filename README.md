@@ -16,9 +16,10 @@ Ermittlung von Finalpaarungen.
 - Veranstaltungen, Wettkampfflächen (Play Areas), Teilnehmer, Referees und Spielpläne
   im Browser anlegen und bearbeiten; native LiveScore-JSON-Dateien importieren und exportieren.
 - Spielstände mit **+1 / −1** erfassen und mit **UNDO** korrigieren.
-- Paarungen vor Spielbeginn korrigieren, Links/Rechts zuordnen, Seiten wechseln,
-  Spiele pausieren und Ergebnisse bestätigen.
-- Je nach Sportprofil Abschnitte und zusätzliche Zähler, etwa Teamfouls, erfassen.
+- Paarungen vor Spielbeginn korrigieren, Links/Rechts zuordnen, Seiten wechseln
+  und Ergebnisse bestätigen.
+- Je nach Sportprofil Abschnitte, deren Pausen und zusätzliche Zähler, etwa Teamfouls,
+  manuell erfassen. Keine automatische Wettkampfregel-Auswertung.
 - Mehrere Bediener sehen und bearbeiten gemeinsam denselben aktuellen Spielstand.
 - Oberfläche auf Englisch, Deutsch und Tschechisch; getrennte Zugänge für
   Administration und Bedienung.
@@ -74,8 +75,8 @@ anschließend das Operator-Passwort setzen. Vor Internetfreigabe beide Startpass
 2. Unter **Konfiguration** Play Areas, Teilnehmer, Referees und Spielplan erfassen.
 3. In der **Bedienung** ein Spiel auswählen, die Paarung bestätigen oder korrigieren
    und Links/Rechts im Programmbild festlegen.
-4. **Spiel starten**, Score erfassen; bei Bedarf **UNDO**, **Pause / Fortsetzen**
-   oder **Seitenwechsel** nutzen.
+4. Wettkampf starten und Score erfassen; bei Bedarf **UNDO** oder **Seitenwechsel**
+   nutzen. Zwischen Abschnitten eine Abschnittspause setzen und den nächsten Abschnitt starten.
 5. Mit **Spiel Ende** den Endstand prüfen und **Ergebnis bestätigen**.
    Danach das nächste Spiel auswählen.
 

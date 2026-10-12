@@ -469,7 +469,7 @@ class MigrationTest(unittest.TestCase):
                 with TestClient(create_app(auth_config=AuthConfig(enabled=False), data_dir=directory)) as client:
                     snap = client.get('/api/v1/tournament').json()
                     self.assertEqual(snap['live']['left']['score'],2)
-                    self.assertEqual(snap['live']['status'],'paused')
+                    self.assertEqual(snap['live']['status'],'live')
                     self.assertEqual(len(client.get('/api/v1/event-catalog').json()['items']),1)
                     self.assertEqual(load(directory/'events'/f"{snap['active_event_id']}.json"),state)
                 self.assertEqual(legacy.read_bytes(),original)

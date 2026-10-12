@@ -27,7 +27,7 @@ Dass das Sportregelwerk eine Spielzeit kennt, ist allein kein Grund, sie in Live
 
 ## Ist-Stand
 
-LiveScore 0.1.2 hat keine Uhr. `GET /api/v1/live` enthält keine Zeitinformation. Die [Bedienungsanleitung](../OPERATOR.md#halbzeiten-abschnitte-und-zähler) beschreibt den Ablauf ohne integrierte Spieluhr.
+LiveScore hat keine Uhr. `GET /api/v1/live` enthält keine Zeitinformation. Die [Bedienungsanleitung](../OPERATOR.md#wettkampfabschnitte-pausen-und-zähler) beschreibt den Ablauf ohne integrierte Spieluhr.
 
 ## Zukunftsthema
 

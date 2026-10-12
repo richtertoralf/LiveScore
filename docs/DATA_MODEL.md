@@ -60,9 +60,9 @@ löst die Zuordnung bereits in `left` und `right` auf; siehe [API](API.md).
 | Paarung und Seiten vorbereiten | `scheduled → ready` |
 | Vorbereitung zurücknehmen | `ready → scheduled` |
 | Starten | `ready → live` |
-| Pause / Fortsetzen | `live ⇄ paused` |
+| Abschnittspause setzen/aufheben | Status bleibt `live`, `intermission` wird geändert |
 | Ergebnis bestätigen | `live/paused → finished` |
-| Wiederöffnen | `finished → paused` |
+| Wiederöffnen | `finished → live` |
 
 `ready` verlangt zwei verschiedene bekannte Teilnehmer, eine gültige
 Seitenzuordnung und Scores von null. Score, Counter und Undo sind nur bei
@@ -70,6 +70,11 @@ Seitenzuordnung und Scores von null. Score, Counter und Undo sind nur bei
 Auswählbar sind geplante oder beendete Spiele, solange kein anderes Spiel
 `ready`, `live` oder `paused` ist. `idle` ist ein API-Zustand ohne ausgewähltes Spiel,
 kein gespeicherter Match-Status.
+
+`paused` und die bisherigen `pause`-/`resume`-Aktionen bleiben ausschließlich für
+Bestandsdaten und ältere API-Clients unterstützt. Neue Bedienabläufe benötigen sie
+nicht. Die aufbereitete Live-Ausgabe stellt `paused` als `live` dar; der rohe State
+und Exporte behalten den gespeicherten Wert. Es ist keine Datenmigration erforderlich.
 
 ## Sportprofil
 
@@ -111,8 +116,9 @@ Wert übernommen. Unbekannte Referenzen, negative Werte und Nichtnull-Werte für
 zukünftige Abschnitte werden abgewiesen. Geplante und vorbereitete Spiele verlangen
 Abschnitt 1 und Nullwerte.
 
-`intermission` kennzeichnet eine Pause vor dem nächsten Abschnitt, unabhängig
-vom Status `paused`. Ein Abschnittswechsel und das Spielende setzen sie zurück.
+`intermission` kennzeichnet ausschließlich eine Pause vor dem nächsten Abschnitt.
+Ein Abschnittswechsel und das Spielende setzen sie zurück. Wiederöffnen setzt den
+Status direkt auf `live` und stellt keine frühere Abschnittspause automatisch wieder her.
 Nach Spielbeginn kann das Profil nicht mehr geändert werden.
 
 Ohne Profil gelten ein Abschnitt und keine Zähler. Fehlende optionale Felder

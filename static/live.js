@@ -1,4 +1,4 @@
-import { t, periodAction, periodReturn } from './i18n.js';
+import { t, periodLabel, periodBreak, periodAction, periodReturn } from './i18n.js';
 import { $, escape as e, Connection, message } from './common.js';
 let editPairing = false, showFinished = false, finishRevision = null, reopenRevision = null, periodRevision = null, selectionToken = null;
 const button = (action, label, cls = '', disabled = false) => `<button data-action="${action}" class="${cls}" data-disabled="${disabled}">${label}</button>`;
@@ -7,8 +7,6 @@ const name = (state, id, fallback = t('Noch offen')) => state.participants.find(
 function matchInfo(state, match) {
   return `${e(match.date)} · ${e(match.time.slice(0,5))} · ${e(state.play_areas.find(a => a.id === match.play_area_id)?.label)}${match.stage ? ' · ' + e(match.stage) : ''}${match.round ? ' · ' + e(match.round) : ''}`;
 }
-// Server decides whether the profile's periods are halves; the UI only chooses the wording.
-const breakLabel = state => ['first_half','half_time','second_half'].includes(state.live.period_info?.code) ? t('Halbzeitpause') : t('Pause zwischen Abschnitten');
 function options(state, selected) {
   return `<option value="">${t("Bitte wählen")}</option>` + state.participants.map(p => `<option value="${e(p.id)}" ${p.id === selected ? 'selected' : ''}>${e(p.name)}</option>`).join('');
 }
@@ -36,9 +34,9 @@ function render(state) {
   }
   if (match) {
     const profile = state.event?.sport_profile;
-    const status = {scheduled:t('NÄCHSTES SPIEL'),ready:t('BEREIT'),live:t('LIVE'),paused:t('PAUSE'),finished:t('BEENDET')}[match.status];
-    html += `<div class="panel"><span class="status ${match.status}">${status}</span><p class="muted">${matchInfo(state,match)}</p>`;
-    if (profile) html += `<p id="period-label">${match.period}. ${e(t(profile.period_label))}${match.intermission ? ` · <strong id="intermission-label">${e(breakLabel(state))}</strong>` : ''} · ${profile.periods} ${t("Abschnitte")}</p>`;
+    const status = match.intermission ? periodBreak(profile.period_label) : {scheduled:t('NÄCHSTES SPIEL'),ready:t('BEREIT'),live:t('LIVE'),finished:t('BEENDET')}[state.live.status];
+    html += `<div class="panel"><span class="status ${match.intermission ? 'intermission' : state.live.status}">${e(status)}</span><p class="muted">${matchInfo(state,match)}</p>`;
+    if (profile) html += `<p id="period-label">${match.period}. ${e(periodLabel(profile.period_label))}${match.intermission ? ` · <strong id="intermission-label">${e(periodBreak(profile.period_label))}</strong>` : ''} · ${profile.periods} ${t("Abschnitte")}</p>`;
     if (match.status === 'scheduled') {
       html += `<div class="pairing-names">${e(name(state,match.participant_1,match.placeholder_1))}<span>${t("gegen")}</span>${e(name(state,match.participant_2,match.placeholder_2))}</div>`;
       if (editPairing || !match.participant_1 || !match.participant_2) {
@@ -63,14 +61,13 @@ function render(state) {
         html += '</div>';
       }
       html += '</div>';
-      if (match.status === 'ready') html += `<div class="stack">${button('switch-sides',t('Seiten tauschen'))}${button('start',t('Spiel starten'),'primary')}${button('unprepare',t('Paarung ändern / Vorbereitung zurücknehmen'))}</div>`;
+      if (match.status === 'ready') html += `<div class="stack">${button('switch-sides',t('Seiten tauschen'))}${button('start',profile ? e(periodAction(1,profile.period_label)) : t('Spiel starten'),'primary')}${button('unprepare',t('Paarung ändern / Vorbereitung zurücknehmen'))}</div>`;
       if (['live','paused'].includes(match.status)) {
         html += button('undo',t('UNDO · letzter Score'),'undo',!state.can_undo);
-        html += `<div class="actions">${button(match.status === 'live' ? 'pause' : 'resume',match.status === 'live' ? t('Pause') : t('Fortsetzen'))}${button('switch-sides',t('Seitenwechsel'))}</div>${button('finish-dialog',t('Spiel Ende'),'danger')}`;
-        if (profile && match.period < profile.periods) {
-          const intermission = match.intermission ? e(periodReturn(match.period,profile.period_label)) : e(breakLabel(state));
-          html += `<div class="period-action stack">${button('intermission',intermission)}${button('period-dialog',e(periodAction(match.period+1,profile.period_label)))}</div>`;
-        }
+        if (profile && match.intermission) html += `<div class="stack period-action">${button('period-dialog',e(periodAction(match.period+1,profile.period_label)),'primary')}</div>`;
+        html += '<div class="actions">';
+        if (profile && match.period < profile.periods) html += button('intermission',e(match.intermission ? periodReturn(match.period,profile.period_label) : periodBreak(profile.period_label)));
+        html += button('switch-sides',t('Seitenwechsel')) + '</div>' + button('finish-dialog',t('Spiel Ende'),'danger');
       }
       if (match.status === 'finished') html += `<p>${t("Ergebnis bestätigt. Nächstes Spiel auswählen.")}</p>${button('reopen-dialog',t('Spiel wieder öffnen'))}`;
     }

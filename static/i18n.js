@@ -1,5 +1,9 @@
 export const translations = {
   "en": {
+    "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt fortgesetzt.": "The match continues with unchanged score, sides and period.",
+    "Satz": "Set",
+    "Rundenpause": "Round break",
+    "Satzpause": "Set break",
     "Verbinde …": "Connecting…",
     "Verbunden": "Connected",
     "Offline · Bedienung gesperrt": "Offline · Controls locked",
@@ -35,7 +39,6 @@ export const translations = {
     "Ergebnis bestätigen": "Confirm result",
     "Spiel wieder öffnen?": "Reopen match?",
     "Spiel wieder öffnen": "Reopen match",
-    "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt in PAUSE fortgesetzt. Mit „Fortsetzen“ ist es wieder LIVE.": "The match returns to PAUSED with unchanged score, sides and period. Use Resume to go LIVE again.",
     "Spielzustand wurde geändert. Bitte Anzeige prüfen.": "The match state changed. Please review the display.",
     "Counter werden gemäß Sportprofil für den nächsten Abschnitt gesetzt. Bisherige Werte bleiben gespeichert. Score und Seiten bleiben erhalten.": "Counters are set for the next period according to the sport profile. Previous values, scores and sides are preserved.",
     "Abschnitt starten": "Start period",
@@ -50,7 +53,6 @@ export const translations = {
     "NÄCHSTES SPIEL": "NEXT MATCH",
     "BEREIT": "READY",
     "LIVE": "LIVE",
-    "PAUSE": "PAUSED",
     "BEENDET": "FINISHED",
     "Abschnitte": "periods",
     "gegen": "versus",
@@ -67,8 +69,6 @@ export const translations = {
     "Spiel starten": "Start match",
     "Paarung ändern / Vorbereitung zurücknehmen": "Edit pairing / cancel preparation",
     "UNDO · letzter Score": "UNDO · last score",
-    "Pause": "Pause",
-    "Fortsetzen": "Resume",
     "Seitenwechsel": "Switch sides",
     "Spiel Ende": "Finish match",
     "starten": "start",
@@ -246,6 +246,10 @@ export const translations = {
     "next_period": "Start {label} {period}"
   },
   "de": {
+    "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt fortgesetzt.": "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt fortgesetzt.",
+    "Satz": "Satz",
+    "Rundenpause": "Rundenpause",
+    "Satzpause": "Satzpause",
     "Verbinde …": "Verbinde …",
     "Verbunden": "Verbunden",
     "Offline · Bedienung gesperrt": "Offline · Bedienung gesperrt",
@@ -281,7 +285,6 @@ export const translations = {
     "Ergebnis bestätigen": "Ergebnis bestätigen",
     "Spiel wieder öffnen?": "Spiel wieder öffnen?",
     "Spiel wieder öffnen": "Spiel wieder öffnen",
-    "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt in PAUSE fortgesetzt. Mit „Fortsetzen“ ist es wieder LIVE.": "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt in PAUSE fortgesetzt. Mit „Fortsetzen“ ist es wieder LIVE.",
     "Spielzustand wurde geändert. Bitte Anzeige prüfen.": "Spielzustand wurde geändert. Bitte Anzeige prüfen.",
     "Counter werden gemäß Sportprofil für den nächsten Abschnitt gesetzt. Bisherige Werte bleiben gespeichert. Score und Seiten bleiben erhalten.": "Counter werden gemäß Sportprofil für den nächsten Abschnitt gesetzt. Bisherige Werte bleiben gespeichert. Score und Seiten bleiben erhalten.",
     "Abschnitt starten": "Abschnitt starten",
@@ -296,7 +299,6 @@ export const translations = {
     "NÄCHSTES SPIEL": "NÄCHSTES SPIEL",
     "BEREIT": "BEREIT",
     "LIVE": "LIVE",
-    "PAUSE": "PAUSE",
     "BEENDET": "BEENDET",
     "Abschnitte": "Abschnitte",
     "gegen": "gegen",
@@ -313,8 +315,6 @@ export const translations = {
     "Spiel starten": "Spiel starten",
     "Paarung ändern / Vorbereitung zurücknehmen": "Paarung ändern / Vorbereitung zurücknehmen",
     "UNDO · letzter Score": "UNDO · letzter Score",
-    "Pause": "Pause",
-    "Fortsetzen": "Fortsetzen",
     "Seitenwechsel": "Seitenwechsel",
     "Spiel Ende": "Spiel Ende",
     "starten": "starten",
@@ -492,6 +492,10 @@ export const translations = {
     "next_period": "{period}. {label} starten"
   },
   "cs": {
+    "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt fortgesetzt.": "Zápas pokračuje se stejným skóre, stranami a částí.",
+    "Satz": "Set",
+    "Rundenpause": "Přestávka mezi koly",
+    "Satzpause": "Přestávka mezi sety",
     "Verbinde …": "Připojování…",
     "Verbunden": "Připojeno",
     "Offline · Bedienung gesperrt": "Offline · Ovládání uzamčeno",
@@ -527,7 +531,6 @@ export const translations = {
     "Ergebnis bestätigen": "Potvrdit výsledek",
     "Spiel wieder öffnen?": "Znovu otevřít zápas?",
     "Spiel wieder öffnen": "Znovu otevřít zápas",
-    "Das Spiel wird mit unverändertem Score, Seiten und Abschnitt in PAUSE fortgesetzt. Mit „Fortsetzen“ ist es wieder LIVE.": "Zápas se vrátí do stavu PŘESTÁVKA se stejným skóre, stranami a částí. Tlačítkem „Pokračovat“ bude opět ŽIVĚ.",
     "Spielzustand wurde geändert. Bitte Anzeige prüfen.": "Stav zápasu se změnil. Zkontrolujte zobrazení.",
     "Counter werden gemäß Sportprofil für den nächsten Abschnitt gesetzt. Bisherige Werte bleiben gespeichert. Score und Seiten bleiben erhalten.": "Počítadla se nastaví pro další část podle sportovního profilu. Dosavadní hodnoty, skóre a strany zůstanou zachovány.",
     "Abschnitt starten": "Zahájit část",
@@ -542,7 +545,6 @@ export const translations = {
     "NÄCHSTES SPIEL": "DALŠÍ ZÁPAS",
     "BEREIT": "PŘIPRAVENO",
     "LIVE": "ŽIVĚ",
-    "PAUSE": "PŘESTÁVKA",
     "BEENDET": "UKONČENO",
     "Abschnitte": "části",
     "gegen": "proti",
@@ -559,8 +561,6 @@ export const translations = {
     "Spiel starten": "Zahájit zápas",
     "Paarung ändern / Vorbereitung zurücknehmen": "Upravit dvojici / zrušit přípravu",
     "UNDO · letzter Score": "ZPĚT · poslední skóre",
-    "Pause": "Pozastavit",
-    "Fortsetzen": "Pokračovat",
     "Seitenwechsel": "Změnit strany",
     "Spiel Ende": "Ukončit zápas",
     "starten": "zahájit",
@@ -745,8 +745,20 @@ export function t(key) {
   const selected = translations[language];
   return Object.hasOwn(selected,key) ? selected[key] : Object.hasOwn(translations.en,key) ? translations.en[key] : key;
 }
-export function periodAction(period,label) { return t('next_period').replace('{period}',period).replace('{label}',t(label)); }
-export function periodReturn(period,label) { return t('period_return').replace('{period}',period).replace('{label}',t(label)); }
+// This vocabulary translates labels, not sport rules or a fixed number of periods.
+const periodTerms = {halbzeit:'Halbzeit', half:'Halbzeit', 'poločas':'Halbzeit',
+  runde:'Runde', round:'Runde', kolo:'Runde', satz:'Satz', set:'Satz',
+  abschnitt:'Abschnitt', period:'Abschnitt', 'část':'Abschnitt'};
+export function periodLabel(label) {
+  const term = periodTerms[label.trim().toLowerCase()];
+  return term ? t(term) : label;
+}
+export function periodBreak(label) {
+  const term = periodTerms[label.trim().toLowerCase()];
+  return t({Halbzeit:'Halbzeitpause', Runde:'Rundenpause', Satz:'Satzpause'}[term] || 'Pause zwischen Abschnitten');
+}
+export function periodAction(period,label) { return t('next_period').replace('{period}',period).replace('{label}',periodLabel(label)); }
+export function periodReturn(period,label) { return t('period_return').replace('{period}',period).replace('{label}',periodLabel(label)); }
 export function errorText(detail) {
   const key = typeof detail === 'string' ? detail.replace(/^Value error, /,'') : 'invalid_input';
   return Object.hasOwn(translations.en,key) ? t(key) : t('invalid_input');

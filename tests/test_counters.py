@@ -113,7 +113,7 @@ class CounterTest(unittest.TestCase):
         self.action('pause')
         self.action('period', period=2)
         after = self.state()['matches'][0]
-        self.assertEqual(after['status'], 'paused')
+        self.assertEqual(after['status'], 'paused')  # Legacy-State; live projection is canonical.
         self.assertEqual(after['side_l'], 'fc-ingolstadt-04')
         self.assertEqual(after['scores'], before['scores'])
         self.assertEqual(after['officials'], before['officials'])

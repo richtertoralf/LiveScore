@@ -105,7 +105,7 @@ Es gibt keine eigene Phase oder Funktion für das Strafstoßschießen.
 
 Ein Spiel, das einen Sieger benötigt, bleibt geöffnet, bis der Sieger feststeht, und wird erst dann mit „Spiel Ende“ beendet.
 
-Dieses Issue ändert daran nichts. Es dokumentiert die Regel nur im README.
+Dieses Issue ändert daran nichts. Die Regel soll in der Bedienungsanleitung dokumentiert werden.
 
 ## Änderungen
 
@@ -137,8 +137,11 @@ Dieses Issue ändert daran nichts. Es dokumentiert die Regel nur im README.
 ### E. Dokumentation
 
 - **README:**
-  - Bedienablauf, Bedienung Punkt 8 (Pause) und Punkt 10 (Wiederöffnen), Abschnitt „Halbzeitpause“, Rollentabelle.
-  - Unter „Bewusste Grenzen“ ergänzen: keine allgemeine Pause; Entscheidungsspiele bleiben geöffnet, bis der Sieger feststeht.
+  - Den kurzen Bedienablauf und die Funktionsübersicht anpassen.
+- **docs/OPERATOR.md:**
+  - Pause/Fortsetzen, Wiederöffnen und Halbzeitpause an den neuen Bedienablauf anpassen.
+  - Ergänzen: keine allgemeine Pause; Entscheidungsspiele bleiben geöffnet, bis der Sieger feststeht.
+- **docs/API.md:**
   - Klarstellen: Der Status `paused` und `POST /api/v1/live/pause` bleiben nur aus Kompatibilitätsgründen bestehen.
 - **AGENTS.md:**
   - Bedienablauf ohne „Pause / Fortsetzen“.
@@ -182,7 +185,7 @@ Dieses Issue ändert daran nichts. Es dokumentiert die Regel nur im README.
 - [ ] Nirgends in der Oberfläche erscheint „PAUSE“.
 - [ ] EN, DE und CS sind vollständig. Keine unübersetzten deutschen Wörter in EN.
 - [ ] API-Ausgabe und gespeicherte Dateien sind unverändert. Die Backend-Tests bestehen.
-- [ ] README und AGENTS.md beschreiben den neuen Ablauf und die Produktregeln.
+- [ ] README, Bedienungsanleitung, API-Dokumentation und AGENTS.md beschreiben den neuen Ablauf und die Produktregeln.
 
 ## Bis zum Rollout
 

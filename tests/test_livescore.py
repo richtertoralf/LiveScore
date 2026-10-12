@@ -364,8 +364,8 @@ class StorageTest(unittest.TestCase):
         self.assertEqual(len(state.participants),6)
         self.assertEqual(state.revision,0)
 
-    def test_readme_api_example_matches_real_requests(self):
-        examples = [json.loads(block) for block in re.findall(r'```json\n(.*?)\n```', (ROOT/'README.md').read_text(), re.S)]
+    def test_documented_api_example_matches_real_requests(self):
+        examples = [json.loads(block) for block in re.findall(r'```json\n(.*?)\n```', (ROOT/'docs/API.md').read_text(), re.S)]
         expected = next(item for item in examples if item.get('status') == 'live')
         sample = load(ROOT/'examples/prague-2026.json')
         save(self.path,sample)

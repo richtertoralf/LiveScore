@@ -86,13 +86,83 @@ Die Abschlussmeldung nennt Version, URL und Pfade. Standardzugriff:
 - öffentliche Live-API: `http://HOST:8730/api/v1/live`
 - öffentliche Version: `http://HOST:8730/api/version`
 
-Initial credentials: **admin / admin**, **operator / operator**.
-**Diese Passwörter vor Internetfreigabe ändern. HTTPS ist zwingend erforderlich.**
-Operator verwaltet alle fachlichen Veranstaltungs- und Live-Daten; Admin zusätzlich
-Benutzer/Passwörter. Der erste Admin-Login erzwingt dessen Passwortänderung.
-EN ist Default, DE und CS sind im Header wählbar. Die Version erscheint im Footer.
+Die [erste Anmeldung und Passwortverwaltung](#benutzer-und-passwörter) erfolgt
+im Browser. EN ist Default, DE und CS sind im Header wählbar.
+Die Version erscheint im Footer.
 
-## Konfiguration und manueller Betrieb
+## Manueller Start unter Linux und Windows
+
+Voraussetzung ist Python 3.12 oder neuer mit `venv` und `pip`. Zuerst das
+Repository klonen und in dessen Verzeichnis wechseln:
+
+```sh
+git clone https://github.com/richtertoralf/LiveScore.git
+cd LiveScore
+```
+
+Unter Linux:
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m livescore
+```
+
+Unter Windows in PowerShell (`py -3 --version` muss mindestens 3.12 anzeigen):
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m livescore
+```
+
+Der Server läuft im Vordergrund, ohne einen Dienst zu installieren.
+Die Oberfläche liegt unter `http://localhost:8730/`; von anderen Geräten aus
+den Servernamen oder seine IP-Adresse verwenden. Ohne vorhandene Daten beginnt
+der manuelle Start mit einem leeren Veranstaltungskatalog. Die Prag-Datei kann
+über `/events` importiert und anschließend ausgewählt werden.
+
+## Serverkonfiguration
+
+Im Checkout verwendet LiveScore `config/livescore.yml`, der Linux-Dienst
+`/etc/livescore/livescore.yml`. Beispiel für den Checkout:
+
+```yaml
+bind_host: 0.0.0.0
+port: 8730
+data_dir: ../data
+auth:
+  enabled: true
+  file: auth.yml
+  session_hours: 12
+  secure_cookie: false
+```
+
+| Einstellung | Bedeutung |
+|---|---|
+| `bind_host` | `0.0.0.0` für Zugriff über Netzwerkschnittstellen, `127.0.0.1` nur lokal |
+| `port` | freier TCP-Port von 1 bis 65535; Standard `8730` für Oberfläche und API |
+| `data_dir` | Veranstaltungsdateien und aktive Auswahl; installiert: `/var/lib/livescore/data` |
+| `auth.enabled` | Login für Bedienung und Verwaltung; Standard `true` |
+| `auth.file` | Passwortdatei; installiert: `/etc/livescore/auth.yml` |
+| `auth.session_hours` | Session-Laufzeit ab Login; Standard 12 Stunden |
+| `auth.secure_cookie` | `true` bei HTTPS; für lokalen HTTP-Zugriff `false` |
+
+Relative Daten- und Auth-Pfade beziehen sich auf das Verzeichnis der Config-Datei,
+nicht auf das Arbeitsverzeichnis. Als Legacy-Option ist `data_file` statt `data_dir`
+möglich; genau eine der beiden Optionen angeben. Das Elternverzeichnis der
+Legacy-Datei wird das Datenverzeichnis. [Migration und Dateiformat](DATA_MODEL.md#dateien-und-migration).
+
+Eine eigene Config kann beim manuellen Start angegeben werden:
+
+```sh
+.venv/bin/python -m livescore --config config/local.yml
+```
+
+Genau einen Serverprozess pro Datenverzeichnis starten. Separate Instanzen
+benötigen getrennte Daten- und Auth-Dateien sowie Ports. JSON-Dateien nur bei
+beendetem Server manuell bearbeiten. Ungültige Konfiguration oder beschädigte
+vorhandene Daten führen zum Startabbruch und werden nicht durch Standarddaten ersetzt.
 
 Für die Installation `/etc/livescore/livescore.yml` bearbeiten, danach:
 
@@ -101,25 +171,8 @@ sudo systemctl restart livescore
 sudo journalctl -u livescore -n 100 --no-pager
 ```
 
-Dieser Restart gilt für Änderungen an Server-Host/Port, nicht für Passwort-Recovery.
-Für ein vergessenes Admin-Passwort während einer Veranstaltung:
-
-```sh
-sudo livescore --reset-admin-password
-# Auth-Datei auch unabhängig von Recovery erneut einlesen:
-sudo systemctl reload livescore
-```
-
-`ExecReload=/bin/kill -HUP $MAINPID` lädt ausschließlich Auth neu, ohne Prozesswechsel.
-Admin-Recovery erhält Operator-Sessions/WebSockets und sämtliche Live-Daten.
-Ungültige Credentials werden abgewiesen, der bisherige RAM-Stand bleibt aktiv.
-Die CLI speichert atomar unter demselben kurzen Lock wie die Web-Passwortverwaltung
-und übernimmt den bisherigen Dateieigentümer. Kein Stop/Start/Restart im Recovery-Pfad.
-Der automatisch angeforderte Reload wird im Dienstlog bestätigt; die CLI wartet
-nicht auf eine fachliche Bestätigung des asynchronen Signalhandlers.
-Ohne passenden laufenden systemd-Dienst meldet sie den erforderlichen manuellen
-Auth-Reload beziehungsweise das Laden beim nächsten normalen Start.
-Details und Verhalten älterer Prozesse: [README – Recovery](../README.md#admin-passwort-vergessen-recovery-ohne-downtime).
+Dieser Restart übernimmt Änderungen an der Serverkonfiguration.
+Für [Passwort-Recovery](#admin-passwort-vergessen) ist kein Neustart nötig.
 
 Host und Port sind frei konfigurierbar. Der Installer unterstützt Datenpfade
 innerhalb `/var/lib/livescore/data` und Auth-Pfade innerhalb `/etc/livescore`.
@@ -140,6 +193,80 @@ verhindert die Prozesssperre eine zweite Instanz. Für normale Bedienung den
 Systemdienst verwenden. `livescore --config PFAD` ermöglicht einen ausdrücklich
 separaten manuellen Betrieb. `python -m livescore --version` funktioniert in der
 venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
+
+### HTTPS
+
+Vor Internetfreigabe beide Startpasswörter ändern, HTTPS über einen Reverse Proxy
+einrichten und `auth.secure_cookie: true` setzen. Nur den HTTPS-Zugang öffentlich
+erreichbar machen; den LiveScore-Port nicht direkt freigeben.
+Bei einem Proxy auf demselben Rechner kann LiveScore an `127.0.0.1` gebunden werden.
+
+Der Proxy muss den öffentlichen `Host` erhalten und WebSocket-Upgrades weiterleiten,
+damit Browser-Origin und Host übereinstimmen. Uvicorn vertraut keinen
+Forwarded-Headers; die Cookie-Sicherheit wird ausdrücklich konfiguriert.
+Bei getrennten Maschinen auch die Verbindung zum Backend absichern.
+TLS, Zertifikate und Firewall richtet der Betreiber ein.
+
+## Benutzer und Passwörter
+
+| Benutzer | Startpasswort | Berechtigung |
+|---|---|---|
+| `operator` | `operator` | Veranstaltungsdaten bearbeiten und Spiele bedienen |
+| `admin` | `admin` | zusätzlich Passwörter verwalten und Veranstaltungen zurücksetzen/ersetzen |
+
+Beim ersten Admin-Login führt LiveScore zu `/users`. Zuerst das eigene Passwort
+ändern, danach das Operator-Passwort setzen. Neue Passwörter müssen 12–1024 Zeichen
+lang sein und werden zweimal eingegeben. Das alte Passwort ist nicht erforderlich.
+Operatoren ändern ihr Passwort über den Admin. Weitere Benutzer oder Rollen
+können nicht angelegt werden.
+
+Passwortänderungen melden alle Sessions des betroffenen Accounts ab.
+Ein Serverneustart beendet alle Sessions, erhält aber Passwörter und Veranstaltungsdaten.
+Die Passwortdatei enthält scrypt-Hashes und wird beim ersten Start angelegt;
+sie nicht von Hand bearbeiten. Im Checkout liegt sie unter `config/auth.yml`.
+Fehlende oder ungültige Accounts in einer vorhandenen Datei führen zum Startabbruch,
+nicht zum Zurücksetzen auf Startpasswörter.
+
+Die Live-Daten unter `GET /api/v1/live` bleiben öffentlich lesbar.
+Die übrigen fachlichen APIs und der WebSocket verlangen bei aktiviertem Auth
+eine Anmeldung. `/docs`, `/redoc` und `/openapi.json` sind Admin-only.
+Details zur Anmeldung eigener Clients stehen in der [API](API.md#anmeldung-eigener-clients).
+Bei ausdrücklich deaktiviertem Auth sind Fachfunktionen ohne Login verfügbar,
+die Passwortverwaltung ist deaktiviert.
+
+### Admin-Passwort vergessen
+
+Auf dem Linux-Dienstrechner:
+
+```sh
+sudo livescore --reset-admin-password
+```
+
+Das neue Passwort wird zweimal verdeckt abgefragt. Die CLI speichert es atomar
+in der vorhandenen gültigen Auth-Datei und fordert beim passenden laufenden
+systemd-Dienst einen Auth-Reload an. Der Reload lädt nur Passwörter neu;
+Operator-Sessions, WebSockets und Live-Daten bleiben erhalten.
+Das Dienstlog bestätigt den asynchronen Reload:
+
+```sh
+sudo journalctl -u livescore -n 100 --no-pager
+```
+
+Ohne laufenden systemd-Dienst wird das Passwort ebenfalls gespeichert.
+Ein laufender Standalone-Prozess unter Linux/Unix benötigt anschließend
+`kill -HUP <geprüfte-LiveScore-PID>`; sonst gilt die Änderung beim nächsten Start.
+Im Checkout die passende Config verwenden:
+
+```sh
+.venv/bin/python -m livescore --config config/local.yml --reset-admin-password
+```
+
+Ungültige neue Auth-Daten werden beim Reload abgewiesen; bisherige Credentials
+bleiben im Speicher aktiv. Bei älteren Prozessen ohne SIGHUP-Unterstützung oder
+einem fehlgeschlagenen Reload kann das Passwort bereits gespeichert sein,
+obwohl die CLI einen Fehler meldet. Erst Dienstlog und Prozessstand prüfen;
+nicht blind erneut zurücksetzen. Beide Passwörter vergessen: zuerst Admin per CLI,
+anschließend Operator unter `/users` neu setzen.
 
 ## Upgrade
 
@@ -187,6 +314,24 @@ Bei Stromverlust während eines Deployments bleiben die Programmlaufzeiten und
 persistenten Daten separat erhalten; die atomare Umschaltung ist kein Ersatz für
 Backups. Nach einem unterbrochenen Vorgang `current`, Config und Dienststatus
 prüfen und gegebenenfalls den letzten Programmstand aktivieren.
+
+## Backup
+
+Für eine vollständige Sicherung den Server kontrolliert beenden und das gesamte
+Datenverzeichnis mit `events/`, `imports/` und `active-event.json` kopieren.
+Serverkonfiguration und Auth-Datei ebenfalls sichern. Bei der Dienstinstallation
+sind dies `/var/lib/livescore/data` und `/etc/livescore`. Lock-Dateien sind keine
+Nutzdaten. Die Auth-Datei und Upgrade-Backups enthalten vertrauliche Passworthashes.
+
+Ein JSON-Export im Browser ist ein konsistenter Snapshot einer einzelnen Veranstaltung
+und kann auf einer anderen Instanz importiert werden. Er enthält keine Passwörter,
+keine gespeicherte Reset-Grundlage und keinen Auswahlzeiger. Separate Exporte
+sind kein zeitgleicher Gesamtsnapshot des Datenverzeichnisses.
+
+Für eine Wiederherstellung den Server stoppen, die gesicherten Dateien an ihre
+konfigurierten Pfade zurückkopieren und bei einer Dienstinstallation den Zugriff
+des Kontos `livescore` auf Config/Auth und Daten sicherstellen. Danach starten und
+aktive Veranstaltung sowie Live-Zustand prüfen.
 
 ## Deinstallation
 

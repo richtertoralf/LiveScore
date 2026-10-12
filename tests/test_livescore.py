@@ -113,9 +113,9 @@ class APITest(unittest.TestCase):
         self.assertEqual(after['right'],dict(id='a',name='A',short_name='',country_code='',score=2,counters={},counter_states={}))
         # Bestehende Felder bleiben erhalten; stage, round und period_info kommen additiv hinzu.
         self.assertEqual(set(after),{'status','revision','match_id','play_area','left','right','officials','period',
-                                     'period_info','stage','round'})
+                                     'period_info','stage','round','sport_profile'})
         self.assertEqual((after['stage'],after['round']),(None,None))
-        self.assertEqual(after['period_info'],dict(number=1,intermission=False,code='period_1',label_en=None))
+        self.assertEqual(after['period_info'],dict(number=1,intermission=False,code='period_1',label_en='1. Period',labels=dict(de='1. Abschnitt',en='1. Period',cs='1. Část')))
         self.assertEqual(after['play_area'],{'id':'area','label':'Court 1'})
         self.assertEqual(self.state()['matches'][0]['scores'],{'a':2,'b':1})
         self.action('undo')

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -13,8 +13,9 @@ from pydantic import Field, ValidationError
 
 from . import __version__
 from .config import ROOT
-from .catalog import Catalog, CreateEvent, SelectEvent, ImportPreview, ImportEvent, ReplaceEvent, ResetEvent
-from .models import Count, ID, Model
+from .catalog import Catalog, CreateEvent, SelectEvent, ImportPreview, ImportEvent, ReplaceEvent, ResetEvent, ProfileCommand, SaveProfile
+from .models import Count, ID, Model, SportProfile
+from .profiles import display_profile
 from .service import Conflict, live_view
 from .storage import FileLease
 from .auth import Auth, AuthConfig, COOKIE
@@ -146,6 +147,21 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     async def catalog():
         return app.state.service.listing()
 
+    @app.get('/api/v1/sport-profiles')
+    async def sport_profiles():
+        service = app.state.service
+        return dict(service.profiles.view(), event_profiles=[
+            dict(id=event_id, event_name=state.event.name, profile=display_profile(state.event.sport_profile))
+            for event_id, state in service.states.items() if state.event and state.event.sport_profile])
+
+    @app.post('/api/v1/sport-profiles/save')
+    async def save_profile(command: SaveProfile):
+        return await app.state.service.profile_apply('save', command)
+
+    @app.post('/api/v1/sport-profiles/delete')
+    async def delete_profile(command: ProfileCommand):
+        return await app.state.service.profile_apply('delete', command)
+
     @app.get("/api/v1/event-catalog/active")
     async def active_event():
         return app.state.service.selection
@@ -191,7 +207,15 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
         return [e.model_dump(mode="json", exclude={"signature"}) for e in app.state.service.state.events]
 
     @app.post("/api/v1/config/{kind}")
-    async def configure(kind: Literal["event", "play-areas", "participants", "referees", "matches"], command: ConfigCommand):
+    async def configure(request: Request, kind: Literal["event", "sport-profile", "play-areas", "participants", "referees", "matches"], command: ConfigCommand):
+        # Operators can edit event details, but cannot smuggle profile changes through that API.
+        if (kind == 'event' and app.state.auth.config.enabled and request.state.session.username != 'admin'
+                and 'sport_profile' in command.data):
+            submitted = command.data['sport_profile']
+            profile = SportProfile.model_validate(submitted) if submitted is not None else None
+            old = app.state.service.state.event
+            if profile != (old.sport_profile if old else None):
+                return JSONResponse({'detail': 'forbidden'}, status_code=403)
         return await app.state.service.apply("config/" + kind, command)
 
     @app.post("/api/v1/live/prepare")

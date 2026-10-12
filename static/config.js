@@ -1,5 +1,6 @@
 import { t } from './i18n.js';
 import { $, escape as e, Connection, uuid, message } from './common.js';
+import { renderProfiles } from './profiles.js';
 const definitions = {
   event: {title:t('Veranstaltung'), fields:[['name',t('Name')],['date_from',t('Datum von'),'date'],['date_to',t('Datum bis'),'date'],['location',t('Ort'),'optional'],['logo_path',t('Logo-Pfad'),'optional'],['score_label',t('Score-Bezeichnung')]]},
   'play-areas': {title:t('Play Areas'), key:'play_areas', fields:[['label',t('Bezeichnung (z. B. Field 1)')]]},
@@ -13,6 +14,7 @@ function selectOptions(kind, state) {
   return '<option value="">'+(kind === 'people' ? t('Noch offen') : t('Bitte wählen'))+'</option>' + (kind === 'people' ? state.participants : state.play_areas).map(i => `<option value="${e(i.id)}">${e(i.name || i.label)}</option>`).join('');
 }
 function render(state) {
+  renderProfiles(app, state);
   if (selectionToken !== state.selection_token) {
     if (document.querySelector('form[data-dirty]')) message(t('Veranstaltung wurde gewechselt. Ungespeicherte Formulare wurden geschlossen.'));
     initialized = false; selectionToken = state.selection_token;
@@ -29,8 +31,8 @@ function render(state) {
   }
   const active = state.matches.find(m => m.id === state.active_match_id);
   const locked = active && ['ready','live','paused'].includes(active.status);
-  $('#config-status').textContent = locked ? t('Konfiguration gesperrt: Spiel ist vorbereitet oder läuft.') : t('Änderungen werden beim Speichern sofort für alle Bediener wirksam.');
-  document.querySelectorAll('fieldset').forEach(f => f.disabled = !!locked);
+  $('#config-status').textContent = locked ? t('Veranstaltungsdetails gesperrt: Spiel ist vorbereitet oder läuft.') : t('Änderungen werden beim Speichern sofort für alle Bediener wirksam.');
+  document.querySelectorAll('#forms fieldset').forEach(f => f.disabled = !!locked);
   for (const [kind, def] of Object.entries(definitions)) {
     const form = $(`form[data-kind="${kind}"]`);
     if (!form.dataset.dirty) {

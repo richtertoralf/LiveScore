@@ -18,8 +18,8 @@ Ermittlung von Finalpaarungen.
 - Spielstände mit **+1 / −1** erfassen und mit **UNDO** korrigieren.
 - Paarungen vor Spielbeginn korrigieren, Links/Rechts zuordnen, Seiten wechseln
   und Ergebnisse bestätigen.
-- Je nach Sportprofil Abschnitte, deren Pausen und zusätzliche Zähler, etwa Teamfouls,
-  manuell erfassen. Keine automatische Wettkampfregel-Auswertung.
+- Sportprofile mit Abschnitten, Pausenbezeichnungen und zusätzlichen Zählern im Browser
+  verwalten; alle Profiltexte gemeinsam für DE/EN/CS pflegen. Wettkampfdaten manuell erfassen. Keine automatische Wettkampfregel-Auswertung.
 - Mehrere Bediener sehen und bearbeiten gemeinsam denselben aktuellen Spielstand.
 - Oberfläche auf Englisch, Deutsch und Tschechisch; getrennte Zugänge für
   Administration und Bedienung.
@@ -72,7 +72,8 @@ anschließend das Operator-Passwort setzen. Vor Internetfreigabe beide Startpass
 
 1. Unter **Veranstaltungen** eine Veranstaltung anlegen oder eine LiveScore-JSON-Datei
    importieren und anschließend **Auswählen**.
-2. Unter **Konfiguration** Play Areas, Teilnehmer, Referees und Spielplan erfassen.
+2. Als Admin unter **Konfiguration → Sportprofile** ein Profil anlegen oder aus der
+   Bibliothek übernehmen. Play Areas, Teilnehmer, Referees und Spielplan erfassen.
 3. In der **Bedienung** ein Spiel auswählen, die Paarung bestätigen oder korrigieren
    und Links/Rechts im Programmbild festlegen.
 4. Wettkampf starten und Score erfassen; bei Bedarf **UNDO** oder **Seitenwechsel**
@@ -86,7 +87,7 @@ wählt diese Veranstaltung bereits aus; beim manuellen Start wird sie über
 **Veranstaltungen → JSON importieren** geladen. Sie enthält vorbereitete Spiele,
 keine tatsächlichen Turnierergebnisse.
 
-Details zu Halbzeiten, Zählern, Ergebniskorrekturen und Importen stehen in der
+Details zu Abschnitten, Zählern, Ergebniskorrekturen und Importen stehen in der
 [Bedienungsanleitung](docs/OPERATOR.md).
 
 ## Live-Daten für andere Anwendungen

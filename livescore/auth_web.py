@@ -1,4 +1,4 @@
-"""HTTP-Zugriffsschutz; fachliche APIs bleiben bis auf Ersetzen/Zurücksetzen einer Veranstaltung von Rollen unabhängig."""
+"""HTTP-Zugriffsschutz; Live-Bedienung und Detailpflege für Operatoren; Profil- und Veranstaltungsverwaltung für Admins."""
 import hmac
 import secrets
 from urllib.parse import urlsplit
@@ -46,8 +46,10 @@ def install_auth(app, root):
                 return RedirectResponse('/users', status_code=303)
             return error('password_required', 403)
         admin_only = (path in ('/users', '/docs', '/redoc', '/openapi.json', '/docs/oauth2-redirect', '/static/users.html',
-                               '/api/v1/event-catalog/replace', '/api/v1/event-catalog/reset')
-                      or path.startswith('/api/auth/'))
+                               '/api/v1/event-catalog/replace', '/api/v1/event-catalog/reset',
+                               '/api/v1/event-catalog/create', '/api/v1/event-catalog/import',
+                               '/api/v1/event-catalog/import/preview', '/api/v1/config/sport-profile')
+                      or path.startswith('/api/auth/') or path.startswith('/api/v1/sport-profiles'))
         if admin_only and session.username != 'admin':
             return error('forbidden', 403)
         return await call_next(request)

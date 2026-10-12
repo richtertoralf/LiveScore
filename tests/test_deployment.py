@@ -15,6 +15,7 @@ from livescore.auth import Auth, PasswordChange, verify_password
 from livescore.bootstrap import inspect_config, seed_if_empty
 from livescore.config import load_config
 from livescore.storage import load, save, FileLease
+from livescore.profiles import ProfileEntry, ProfileLibrary, save_library
 from tools import deploy
 from tools.deploy import Deployment, MARKER, RUNTIME, FILES, atomic_text
 
@@ -65,9 +66,9 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(load(config.data_dir / 'events/prague-2026.json'), expected)
         self.assertEqual((len(expected.matches), len(expected.participants), len(expected.referees)), (14,6,6))
         result = subprocess.run([self.deployment.cli,'--version'], capture_output=True,text=True,check=True)
-        self.assertEqual(result.stdout, 'LiveScore 0.1.2\n')
+        self.assertEqual(result.stdout, 'LiveScore 0.2.0\n')
         with TestClient(create_app(data_dir=config.data_dir,auth_config=config.auth)) as client:
-            self.assertEqual(client.get('/api/version').json(), {'version':'0.1.2'})
+            self.assertEqual(client.get('/api/version').json(), {'version':'0.2.0'})
             self.assertEqual(client.get('/api/v1/live').status_code,200)
             catalog = client.app.state.service
             self.assertEqual(catalog.selection.active_event_id,'prague-2026')
@@ -91,13 +92,18 @@ class DeploymentTest(unittest.TestCase):
         data = json.loads(selection.read_text()); data['active_event_id']='other'
         selection.write_text(json.dumps(data))
         self.deployment.config_file.write_text(self.deployment.config_file.read_text().replace('8730','18730'))
+        save_library(config.data_dir / 'sport-profiles.json', ProfileLibrary(revision=1, profiles=[
+            ProfileEntry(id='prague',profile=state.event.sport_profile)]))
         before = self.snapshot()
         old = self.deployment.current.resolve()
+        # Exercise the actual version transition used by the installed CLI.
+        (old / 'VERSION').write_text('0.1.2\n')
         with self.deployment.lock():
             self.deployment.deploy(ROOT,upgrade=True)
         self.assertNotEqual(self.deployment.current.resolve(),old)
         self.assertTrue(old.exists())
         self.assertEqual(self.snapshot(),before)
+        self.assertEqual((self.deployment.current / 'VERSION').read_text(),'0.2.0\n')
         auth = Auth(config.auth)
         self.assertTrue(verify_password(password,auth.credentials.users['admin'].password_hash))
         self.assertFalse(verify_password('admin',auth.credentials.users['admin'].password_hash))

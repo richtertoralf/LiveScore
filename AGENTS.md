@@ -88,6 +88,17 @@ Sportartspezifische Regeln wie Sätze, Karten, Strafen, Torschützen, Tabellenbe
 - Seitenwechsel ist unabhängig vom Abschnittswechsel. Score, Counter und Undo bleiben in der Abschnittspause bedienbar.
 - Wiederöffnen eines versehentlich beendeten Wettkampfs führt direkt zu `live`, mit unveränderten Scores, Seiten, Abschnitt und Countern.
 
+### Sportprofilverwaltung
+
+- Sportprofile konfigurieren Darstellung und manuelle Erfassung, keine Sportregeln.
+- Nur Admins pflegen Profile, legen Veranstaltungen an und importieren Veranstaltungsdateien.
+- Die unabhängige JSON-Profilbibliothek wird über die Weboberfläche verwaltet.
+- Eine Veranstaltung erhält eine vollständige Kopie; Bibliotheksänderungen verändern keine Veranstaltung.
+- Alle Profil- und Countertexte für DE/EN/CS stehen gemeinsam in `translations` desselben Profils und sind gemeinsam bearbeitbar.
+- Verwendete Abschnittsanzahl, Counter-IDs und Rücksetzverhalten bleiben fest; Texte und Anzeigegrenzen bleiben bearbeitbar.
+- Bestehende Prag-Dateien bleiben ladbar. Kein automatisches Umschreiben beim Lesen.
+- Die Live-API verwendet für alle Profile generische Abschnittscodes und aufgelöste Profiltexte.
+
 ### Externe Turniersysteme sind keine Laufzeitabhängigkeit
 
 Spielpläne können später aus Tournify, CSV, JSON oder anderen Quellen übernommen werden.

@@ -11,6 +11,7 @@ from .auth import Credentials
 from .catalog import Selection, save_selection
 from .config import load_config
 from .models import State
+from .profiles import ProfileLibrary
 from .storage import FileLease, load, save
 
 
@@ -21,6 +22,11 @@ def inspect_config(path):
         Credentials.model_validate(yaml.safe_load(config.auth.file.read_text()))
     for event in (config.data_dir / 'events').glob('*.json'):
         load(event)
+    library = config.data_dir / 'sport-profiles.json'
+    if library.is_symlink():
+        raise ValueError('Profilbibliothek darf kein symbolischer Link sein.')
+    if library.exists():
+        ProfileLibrary.model_validate_json(library.read_text(encoding='utf-8'))
     legacy = config.data_file or config.data_dir / 'tournament.json'
     if legacy.exists():
         load(legacy)

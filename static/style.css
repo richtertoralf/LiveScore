@@ -340,3 +340,13 @@ header { flex-wrap: wrap; }
 .security-warning { color: #ffd19b; border-left: 3px solid #ffb276; padding: 12px; background: #251e17; }
 [hidden] { display: none !important; }
 .app-version { text-align: center; padding: .75rem; font-size: .8rem; color: #9aacc1; }
+.profile-languages { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.profile-languages h3 { font-size: .9rem; color: #72deb6; }
+.profile-counter { border: 1px solid #465d77; border-radius: 9px; padding: 14px; margin-bottom: 18px; }
+.profile-buttons { margin-top: 20px; }
+.checkbox { display: flex; align-items: center; gap: 10px; }
+.checkbox input { width: 24px; min-height: 24px; }
+@media(max-width:600px) {
+  .profile-languages { grid-template-columns: 1fr; }
+  .profile-languages section { border-top: 1px solid #465d77; }
+}

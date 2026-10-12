@@ -6,7 +6,8 @@ import re
 from uuid import uuid4
 
 from . import storage
-from .models import ActionEvent, Event, Match, MatchPlan, Participant, PlayArea, Referee, State
+from .models import ActionEvent, Event, Match, MatchPlan, Participant, PlayArea, Referee, SportProfile, State
+from .profiles import display_profile, structure
 
 
 class Conflict(Exception):
@@ -55,10 +56,6 @@ KNOWN_TERMS = {
     "gold medal match": ("gold_medal_match", "Gold medal match"),
 }
 GROUP = re.compile(r"^gruppe ([a-z])$")
-# Abschnittsbezeichnungen, die bei genau zwei Abschnitten Halbzeiten bedeuten.
-HALF_LABELS = {"halbzeit", "half", "poločas"}
-HALF_TIME_LABELS = {"not_started": "Not started", "first_half": "1st half", "half_time": "Half-time",
-                    "second_half": "2nd half", "full_time": "Full-time"}
 
 
 def term(value, label_en=""):
@@ -72,32 +69,30 @@ def term(value, label_en=""):
     return dict(code=code, name=value, label_en=label_en or label)
 
 
-def halves(profile):
-    return bool(profile and profile.periods == 2 and profile.period_label.casefold() in HALF_LABELS)
-
-
 def period_info(match, profile):
-    use_halves = halves(profile)
     if match.status in ("scheduled", "ready"):
         code = "not_started"
     elif match.status == "finished":
-        code = "full_time" if use_halves else "finished"
+        code = "finished"
     elif match.intermission:
-        code = "half_time" if use_halves else f"intermission_after_{match.period}"
+        code = f"intermission_after_{match.period}"
     else:
-        code = ("first_half", "second_half")[match.period - 1] if use_halves else f"period_{match.period}"
+        code = f"period_{match.period}"
+    display = display_profile(profile or SportProfile())
+    labels = {lang: text['break_label'] if match.intermission else f"{match.period}. {text['period_label']}"
+              for lang, text in display['translations'].items()}
     return dict(number=match.period, intermission=match.intermission, code=code,
-                label_en=HALF_TIME_LABELS[code] if use_halves else None)
+                label_en=labels['en'], labels=labels)
 
 
 def live_view(state):
     match = current_match(state)
+    profile = state.event.sport_profile if state.event else None
     result = dict(status="idle", revision=state.revision, match_id=None,
                   play_area=None, left=None, right=None, officials=[], period=None,
-                  period_info=None, stage=None, round=None)
+                  period_info=None, stage=None, round=None, sport_profile=display_profile(profile))
     if match is None:
         return result
-    profile = state.event.sport_profile if state.event else None
     # Legacy paused states remain editable; the live contract describes an ongoing match.
     result.update(status="live" if match.status == "paused" else match.status, match_id=match.id, period=match.period,
                   play_area=next(a.model_dump() for a in state.play_areas if a.id == match.play_area_id),
@@ -195,9 +190,31 @@ class Service:
                 raise asyncio.CancelledError
             return data
 
+    def change_profile(self, state, profile):
+        old = state.event.sport_profile
+        if structure(old) != structure(profile):
+            if any(m.status != 'scheduled' for m in state.matches):
+                raise Conflict('Abschnittsanzahl, Zähler und Rücksetzverhalten sind nach Vorbereitung oder Spielbeginn festgelegt. Bezeichnungen und Anzeigegrenzen bleiben bearbeitbar.')
+            # Only unstarted matches: replace empty initialized histories, never real results.
+            if any(value for m in state.matches for values in m.counters.values()
+                   for history in values.values() for value in history.values()):
+                raise Conflict('Vorhandene Counterwerte dürfen durch Profiländerungen nicht verloren gehen.')
+            for match in state.matches:
+                match.counters = {}
+                initialize_period(match, profile)
+        state.event.sport_profile = profile
+
     def mutate(self, state, operation, command):
         match = current_match(state)
         if operation.startswith("config/"):
+            if operation == 'config/sport-profile':
+                if state.event is None:
+                    raise Conflict('Keine Veranstaltung ausgewählt.')
+                if set(command.data) != {'sport_profile'}:
+                    raise ValueError('invalid_input')
+                profile = SportProfile.model_validate(command.data['sport_profile']) if command.data['sport_profile'] is not None else None
+                self.change_profile(state, profile)
+                return {'type': 'configuration_changed'}
             if match and match.status in ("ready", "live", "paused"):
                 raise Conflict("Konfiguration ist während eines vorbereiteten oder laufenden Spiels gesperrt.")
             kind = operation.split("/")[1]
@@ -206,8 +223,7 @@ class Service:
                 if state.event:
                     if "sport_profile" not in item.model_fields_set:
                         item.sport_profile = state.event.sport_profile
-                    if item.sport_profile != state.event.sport_profile and any(m.status != "scheduled" for m in state.matches):
-                        raise Conflict("Sportprofil kann nach Spielbeginn nicht geändert werden.")
+                    self.change_profile(state, item.sport_profile)
                 state.event = item
             else:
                 model, key = {"play-areas": (PlayArea, "play_areas"),

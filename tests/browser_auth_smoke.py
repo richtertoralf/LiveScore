@@ -70,7 +70,7 @@ async def run(executable):
                 await expect(admin).to_have_url(url+'/login')
                 await expect(admin.locator('html')).to_have_attribute('lang','en')
                 await expect(admin.locator('h1')).to_have_text('Sign in')
-                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.1.2')
+                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.2.0')
                 await language(admin,'de'); await expect(admin.locator('h1')).to_have_text('Anmelden')
                 await language(admin,'cs'); await expect(admin.locator('h1')).to_have_text('Přihlásit se')
                 # Explicit English fallback without changing the selected language.
@@ -81,18 +81,18 @@ async def run(executable):
                 await expect(admin.locator('#message')).to_have_text('Invalid username or password.')
                 await login(admin,'admin','admin')
                 await expect(admin).to_have_url(url+'/users')
-                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.1.2')
+                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.2.0')
                 await expect(admin.locator('#default-warning')).to_contain_text('Default password is still active')
                 await expect(admin.locator('[data-user="operator"]')).to_be_disabled()
                 await password('admin'); await expect(admin).to_have_url(url+'/login')
                 await login(admin,'admin')
                 await expect(admin).to_have_url(url+'/')
-                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.1.2')
+                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.2.0')
                 await admin.goto(url+'/users')
                 await password('operator')
                 await expect(admin.locator('#default-warning')).to_have_count(0)
                 await admin.goto(url+'/events')
-                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.1.2')
+                await expect(admin.locator('.app-version')).to_have_text('LiveScore v0.2.0')
                 await expect(admin.locator('#connection')).to_have_text('Connected')
                 await admin.locator('#json-import summary').click()
                 await admin.locator('#import-file').set_input_files(ROOT/'imports/prague-2026.json')
@@ -121,25 +121,14 @@ async def run(executable):
                     await expect(page.locator('#connection')).to_have_text('Connected')
                     await expect(page.locator('a[href="/config"]')).to_be_visible()
                 await a.goto(url+'/events')
-                await expect(a.locator('#new-event')).to_be_visible()
-                await expect(a.locator('#json-import')).to_be_visible()
+                await expect(a.locator('#new-event')).to_be_hidden()
+                await expect(a.locator('#json-import')).to_be_hidden()
                 await expect(a.locator('a[download]')).to_be_visible()
                 await expect(a.locator('[data-action="reset-event"]')).to_have_count(0)
                 assert (await a.request.get(url+'/config')).status==200
                 assert (await a.request.get(url+'/users')).status==403
                 assert (await a.request.get(url+'/api/v1/event-catalog/prague-2026/export')).status==200
-                # Operator performs creation, import/export and configuration through the GUI.
-                await a.locator('#new-event summary').click()
-                for key,value in dict(name='Operator Cup',date_from='2026-10-03',date_to='2026-10-04').items():
-                    await a.locator(f'#create-event [name="{key}"]').fill(value)
-                await a.locator('#create-event button[type=submit]').click()
-                await expect(a.locator('#catalog-list article')).to_have_count(2)
-                await a.locator('#json-import summary').click()
-                await a.locator('#import-file').set_input_files(ROOT/'imports/prague-2026.json')
-                await expect(a.locator('[data-action="confirm-import"]')).to_have_text('Import as new event')
-                await expect(a.locator('[data-action="replace-import"]')).to_have_count(0)
-                await a.locator('[data-action="confirm-import"]').click()
-                await expect(a.locator('#catalog-list article')).to_have_count(3)
+                # Operators can export, configure event details and operate; profile imports are admin-only.
                 async with a.expect_download() as exported:
                     await a.locator('[data-event-id="prague-2026"] a[download]').click()
                 download=await exported.value
@@ -186,7 +175,7 @@ async def run(executable):
                 await expect(admin.locator('#score-L')).to_have_text('1')
                 assert not errors,errors
                 await browser.close()
-                print('PASS: EN default, DE/CS switch and persistence, EN fallback, login errors, forced admin change, all password resets/default warnings, admin import/config, admin-only reset/replace (reset dialog EN/DE/CS), operator full event permissions and admin-only password management; anonymous curl live GET, two logged-in operators synchronize score/counter/period, session invalidation incl. WebSockets/logout/restart; no JS errors, no viewport overflow.')
+                print('PASS: EN default, DE/CS switch and persistence, EN fallback, login errors, forced admin change, all password resets/default warnings, admin import/config, admin-only reset/replace (reset dialog EN/DE/CS), operator selection/export/detail editing and live control; admin-only event creation/import, profiles and password management; anonymous curl live GET, two logged-in operators synchronize score/counter/period, session invalidation incl. WebSockets/logout/restart; no JS errors, no viewport overflow.')
         finally:
             if process and process.poll() is None: process.terminate();process.wait(timeout=10)
             log.close()

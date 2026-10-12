@@ -2,6 +2,7 @@
 
 > GitHub: [Issue #5](https://github.com/richtertoralf/LiveScore/issues/5)
 > Status: umgesetzt und unter Linux/Chromium geprüft.
+> Fortführung in 0.2.0: vollständige Profilverwaltung und mehrsprachige Bezeichnungen; generische API-Codes.
 > Umfang: Bedienoberfläche, Live-Projektion, Wiederöffnen, Übersetzungen, Tests und Dokumentation.
 
 ## Anlass und Produktentscheidung
@@ -36,9 +37,9 @@ LiveScore übernimmt daraus keine Zeitnahme oder automatische Regelverarbeitung.
    Der Bediener bestätigt das Wettkampfende; ein früheres Ende ist ebenfalls möglich.
 
 Die Abfolge `Abschnitt n → Pause → Abschnitt n+1` funktioniert für jede konfigurierte
-Anzahl. Bekannte Begriffe werden in EN/DE/CS übersetzt: Halbzeit/Half/Poločas,
-Runde/Round/Kolo und Satz/Set. Eigene Bezeichnungen bleiben erhalten und verwenden
-den neutralen Pausenbegriff. Diese Zuordnung ist Anzeigevokabular, keine Sportregel.
+Anzahl. Seit 0.2.0 pflegt der Admin Abschnitts- und Pausentexte gemeinsam für
+DE/EN/CS im Profil-Editor. Für ältere einsprachige Profile wird Anzeigevokabular
+ergänzt. Keine dieser Bezeichnungen wählt eine Sportregel.
 
 Seitenwechsel ist eine unabhängige Aktion. Es gibt keinen allgemeinen Pause-/
 Fortsetzen-Button. Verletzungen, Time-outs oder andere kurzfristige Unterbrechungen
@@ -55,10 +56,12 @@ Eine beim Spielende aufgehobene Abschnittspause wird nicht automatisch rekonstru
 ## Daten und API-Kompatibilität
 
 - Vorhandene Felder `periods`, `period_label`, `period` und `intermission` genügen.
-  Keine neuen Datenfelder, keine Migration; Schema-Version bleibt 1.
+  Die Abschnittslogik benötigt keine weiteren Zustandsfelder; Schema-Version bleibt 1.
+  Die Profilverwaltung ergänzt in 0.2.0 mehrsprachige `translations`. Keine automatische Dateimigration.
 - Feldnamen und Typen von `GET /api/v1/live` bleiben erhalten. Die bisherigen
-  Halbzeit-Codes und englischen API-Labels bleiben als Darstellungskompatibilität
-  bestehen; die GUI verwendet sie nicht zur Steuerung ihres Ablaufs.
+  Halbzeit-Codes wurden mit 0.2.0 bewusst durch generische Abschnittscodes ersetzt.
+  Die Live-Ausgabe ergänzt Profildefinitionen und Texte für DE/EN/CS; ältere Clients
+  müssen gegebenenfalls angepasst werden. Die GUI verwendet keine Sportart zur Ablaufsteuerung.
 - Bewusste Verhaltensänderung: Wiederöffnen liefert `live` statt `paused`.
 - Alte `paused`-Stände bleiben unverändert ladbar und sofort bedienbar.
   Die gemeinsame Live-Projektion von GET, Tournament-Snapshot und WebSocket liefert
@@ -88,7 +91,7 @@ Eine beim Spielende aufgehobene Abschnittspause wird nicht automatisch rekonstru
 Die Prüfung verwendet eigene Datenverzeichnisse und lokale Testserver. Ein Rollout
 auf laufende Veranstaltungsinstanzen ist nicht Bestandteil dieses Auftrags.
 
-Ergebnis: **144 Unit-Tests bestanden**, dazu die Browser-Smokes für Bedienung und
+Ergebnis der ursprünglichen Issue-Umsetzung: **144 Unit-Tests bestanden**, dazu die Browser-Smokes für Bedienung und
 Auth sowie **neun Profilvarianten in EN/DE/CS mit zwei Browsern**. Ein zusätzlicher
 CS-Lauf prüft unveränderte eigene Abschnittsnamen und Counter nach Wiederöffnen.
 Mobile Screenshots wurden visuell geprüft; Dokumentationslinks, JSON-/YAML-Beispiele,

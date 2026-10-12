@@ -6,11 +6,11 @@ Die Bedienung liegt unter `/`, die Veranstaltungsverwaltung unter `/events`,
 die Konfiguration der aktiven Veranstaltung unter `/config`.
 Mit **EN / DE / CS** im Header lässt sich die Sprache wechseln; Englisch ist
 die Voreinstellung. Der Wechsel lädt die Seite neu, deshalb Formulare vorher
-speichern. Namen und frei eingegebene Texte werden nicht übersetzt.
+speichern. Teilnehmernamen bleiben unverändert; Profiltexte werden in der gewählten Sprache angezeigt.
 
-`operator` und `admin` können alle fachlichen Daten bearbeiten und Spiele bedienen.
-Nur `admin` darf Passwörter verwalten sowie Veranstaltungen zurücksetzen oder
-durch einen Import ersetzen. [Zugang einrichten und Passwörter zurücksetzen](INSTALLATION.md#benutzer-und-passwörter).
+`operator` und `admin` können bestehende Veranstaltungsdetails bearbeiten, eine
+Veranstaltung auswählen, exportieren und Spiele bedienen. Nur `admin` legt Veranstaltungen
+an, importiert oder ersetzt sie, setzt sie zurück und verwaltet Sportprofile und Passwörter. [Zugang einrichten und Passwörter zurücksetzen](INSTALLATION.md#benutzer-und-passwörter).
 
 ## Veranstaltung vorbereiten
 
@@ -30,14 +30,49 @@ durch einen Import ersetzen. [Zugang einrichten und Passwörter zurücksetzen](I
 
 Vorhandene Einträge zum Bearbeiten auswählen. IDs bleiben dabei erhalten.
 Logo-Pfade sind Metadaten; ein Bild-Upload ist nicht enthalten.
-Sportprofile für Abschnitte und Zähler werden per JSON oder API hinterlegt;
-einen Profil-Editor gibt es nicht. Das Format steht im [Datenmodell](DATA_MODEL.md#sportprofil).
+Das Sportprofil richtet der Admin direkt unter **Konfiguration → Sportprofile** ein.
+Das Dateiformat steht im [Datenmodell](DATA_MODEL.md#sportprofil).
 
 Es gibt eine aktive Veranstaltung und ein gemeinsam ausgewähltes Spiel,
 auch bei mehreren Play Areas. Ein vorbereitetes oder laufendes Spiel sperrt
-Veranstaltungswechsel und Konfiguration. Das gilt auch während einer Abschnittspause.
+Veranstaltungswechsel und allgemeine Konfiguration. Profiltexte und Anzeigegrenzen
+bleiben auch während einer Abschnittspause bearbeitbar.
 Vor dem Start kann die Vorbereitung
 zurückgenommen werden; nach dem Start muss das Ergebnis bestätigt werden.
+
+## Sportprofile verwalten (Admin)
+
+Unter **Konfiguration → Sportprofile** stehen das Profil der aktiven Veranstaltung,
+alle Bibliotheksprofile und Profile aus anderen gespeicherten Veranstaltungen zur Auswahl.
+Die Bibliothek kann auch ohne aktive Veranstaltung gepflegt werden.
+
+1. Ein Profil auswählen oder **Neues Profil** wählen.
+2. Abschnittsanzahl sowie Profilname, Abschnitts- und Pausenbezeichnung eintragen.
+   **DE, EN und CS sind gemeinsam sichtbar**, unabhängig von der Oberflächensprache.
+   Ein optionaler Hinweis erscheint in der Bedienung.
+3. Bei Bedarf **Zähler hinzufügen**: Namen und Warntexte in allen drei Sprachen,
+   optionale Warn- und kritische Schwelle sowie das Verhalten beim nächsten Abschnitt festlegen.
+   Die Schwellen heben Werte hervor; sie begrenzen keinen Wert und lösen keine Regel aus.
+4. **In Bibliothek speichern** beziehungsweise **Bibliotheksprofil speichern** sichert
+   die Vorlage. **Als neues Profil bearbeiten** erstellt daraus eine weitere Vorlage.
+5. **Für Veranstaltung übernehmen** speichert die angezeigten Einstellungen als
+   eigenständige Kopie in der aktiven Veranstaltung. Das verändert die Bibliothek nicht.
+
+Bibliotheksänderungen und **Aus Bibliothek löschen** verändern keine Veranstaltungskopie.
+Ein Veranstaltungsexport enthält das komplette Profil mit allen Sprachen und benötigt
+beim Import keine Bibliothek. **Ohne Sportprofil** entfernt die zusätzliche Erfassung,
+sofern die Veranstaltung noch keine dafür relevante Struktur verwendet.
+
+Vor der ersten Spielvorbereitung sind alle Felder frei bearbeitbar. Eine Vorbereitung
+kann dafür zurückgenommen werden. Sobald ein Wettkampf begonnen hat, bleiben Abschnittsanzahl,
+Zähler-IDs und Rücksetzverhalten fest: dieselbe Definition wird für vorhandene Ergebnisse
+und deren Historien verwendet. Bezeichnungen, Hinweise und Anzeigegrenzen
+bleiben bearbeitbar; neue Anzeigegrenzen gelten auch für bereits erfasste Werte.
+Die Bibliotheksvorlage lässt sich jederzeit vollständig ändern. Für eine andere
+Wettkampfstruktur eine neue Veranstaltung verwenden.
+
+Ein offenes Formular wird bei Änderungen durch andere Admins nicht still überschrieben.
+Nach einem Speicherkonflikt **Gespeicherten Stand laden**, prüfen und erneut bearbeiten.
 
 ## Spiel bedienen
 
@@ -85,10 +120,10 @@ Bezeichnung kommen aus dem Sportprofil; der Ablauf ist für jede Anzahl gleich:
 Abschnitt n → Abschnittspause → Abschnitt n+1
 ```
 
-Der Pausenbutton steht neben **Seitenwechsel**, vor **Spiel Ende**. Bei bekannten
-Abschnittsbegriffen heißt er **Halbzeitpause**, **Rundenpause** oder **Satzpause**;
-Eigene Begriffe bleiben erhalten; ihr Pausenbutton heißt **Pause zwischen
-Abschnitten**. Das Statusschild zeigt die jeweilige Pause deutlich an.
+Der Pausenbutton steht neben **Seitenwechsel**, vor **Spiel Ende** und verwendet
+die Pausenbezeichnung aus dem Profil. Das Statusschild zeigt denselben Text.
+Bei älteren Profilen ohne Übersetzungen werden bekannte Abschnittsbegriffe ergänzt;
+eigene Begriffe bleiben erhalten und erhalten eine neutrale Pausenbezeichnung.
 
 Erst während dieser Pause erscheint beispielsweise **2. Runde starten**.
 Der bestehende Bestätigungsdialog schützt den Abschnittswechsel. Eine versehentlich

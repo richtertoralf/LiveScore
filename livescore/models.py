@@ -14,6 +14,22 @@ class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+Language = Literal["de", "en", "cs"]
+
+
+class ProfileLabels(Model):
+    name: str = Field(default="", max_length=200)
+    period_label: str = Field(default="", max_length=200)
+    break_label: str = Field(default="", max_length=200)
+    hint: str = Field(default="", max_length=500)
+
+
+class CounterLabels(Model):
+    label: str = Field(default="", max_length=200)
+    warning_label: str = Field(default="", max_length=200)
+    critical_label: str = Field(default="", max_length=200)
+
+
 class CounterDefinition(Model):
     id: ID
     label: Text
@@ -23,6 +39,7 @@ class CounterDefinition(Model):
     critical_at: Count | None = None
     warning_label: str = Field(default="", max_length=200)
     critical_label: str = Field(default="", max_length=200)
+    translations: dict[Language, CounterLabels] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def thresholds(self):
@@ -32,11 +49,13 @@ class CounterDefinition(Model):
 
 
 class SportProfile(Model):
-    sport: Text
+    # Optional descriptive metadata; never selects program logic.
+    sport: Text = "generic"
     ruleset: str = Field(default="", max_length=200)
     periods: int = Field(default=1, strict=True, ge=1)
     period_label: Text = "Abschnitt"
     counters: list[CounterDefinition] = Field(default_factory=list)
+    translations: dict[Language, ProfileLabels] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def unique_counters(self):

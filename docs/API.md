@@ -23,18 +23,139 @@ ist nicht erforderlich.
   "status": "live",
   "revision": 6,
   "match_id": "match-001",
-  "period": 1,
-  "period_info": {"number": 1, "intermission": false, "code": "first_half", "label_en": "1st half"},
-  "stage": {"code": "group_stage", "name": "Gruppenphase", "label_en": "Group stage"},
-  "round": {"code": "group_a", "name": "Gruppe A", "label_en": "Group A"},
-  "play_area": {"id": "field-1", "label": "Field 1"},
-  "left": {"id": "bsc-praha", "name": "BSC Praha", "short_name": "BSC", "country_code": "CZ", "score": 2, "counters": {"team_fouls": 0}, "counter_states": {"team_fouls": "normal"}},
-  "right": {"id": "fc-ingolstadt-04", "name": "FC Ingolstadt 04", "short_name": "FCI", "country_code": "DE", "score": 1, "counters": {"team_fouls": 0}, "counter_states": {"team_fouls": "normal"}},
+  "play_area": {
+    "id": "field-1",
+    "label": "Field 1"
+  },
+  "left": {
+    "id": "bsc-praha",
+    "name": "BSC Praha",
+    "short_name": "BSC",
+    "country_code": "CZ",
+    "score": 2,
+    "counters": {
+      "team_fouls": 0
+    },
+    "counter_states": {
+      "team_fouls": "normal"
+    }
+  },
+  "right": {
+    "id": "fc-ingolstadt-04",
+    "name": "FC Ingolstadt 04",
+    "short_name": "FCI",
+    "country_code": "DE",
+    "score": 1,
+    "counters": {
+      "team_fouls": 0
+    },
+    "counter_states": {
+      "team_fouls": "normal"
+    }
+  },
   "officials": [
-    {"id": "luis-ramon-perez-macias", "name": "Luis Ramon Pérez Macias", "country_code": "ES", "position": 1, "role": "referee", "role_label_en": "Referee"},
-    {"id": "bennet-kruekemeier", "name": "Bennet Krükemeier", "country_code": "DE", "position": 2, "role": "referee", "role_label_en": "Referee"},
-    {"id": "juan-carlos-paule", "name": "Juan Carlos Paule", "country_code": "ES", "position": 3, "role": "referee", "role_label_en": "Referee"}
-  ]
+    {
+      "country_code": "ES",
+      "id": "luis-ramon-perez-macias",
+      "name": "Luis Ramon Pérez Macias",
+      "position": 1,
+      "role": "referee",
+      "role_label_en": "Referee"
+    },
+    {
+      "country_code": "DE",
+      "id": "bennet-kruekemeier",
+      "name": "Bennet Krükemeier",
+      "position": 2,
+      "role": "referee",
+      "role_label_en": "Referee"
+    },
+    {
+      "country_code": "ES",
+      "id": "juan-carlos-paule",
+      "name": "Juan Carlos Paule",
+      "position": 3,
+      "role": "referee",
+      "role_label_en": "Referee"
+    }
+  ],
+  "period": 1,
+  "period_info": {
+    "number": 1,
+    "intermission": false,
+    "code": "period_1",
+    "label_en": "1. Half",
+    "labels": {
+      "de": "1. Halbzeit",
+      "en": "1. Half",
+      "cs": "1. Poločas"
+    }
+  },
+  "stage": {
+    "code": "group_stage",
+    "name": "Gruppenphase",
+    "label_en": "Group stage"
+  },
+  "round": {
+    "code": "group_a",
+    "name": "Gruppe A",
+    "label_en": "Group A"
+  },
+  "sport_profile": {
+    "sport": "blind_football",
+    "ruleset": "IBSA 2025-2029",
+    "periods": 2,
+    "period_label": "Halbzeit",
+    "counters": [
+      {
+        "id": "team_fouls",
+        "label": "Fouls",
+        "scope": "participant",
+        "reset_each_period": true,
+        "warning_at": 4,
+        "critical_at": 5,
+        "warning_label": "Nächstes Foul → Double Penalty",
+        "critical_label": "Double Penalty",
+        "translations": {
+          "de": {
+            "label": "Fouls",
+            "warning_label": "Nächstes Foul → Double Penalty",
+            "critical_label": "Double Penalty"
+          },
+          "en": {
+            "label": "Fouls",
+            "warning_label": "Next foul → Double Penalty",
+            "critical_label": "Double Penalty"
+          },
+          "cs": {
+            "label": "Fauly",
+            "warning_label": "Další faul → Double Penalty",
+            "critical_label": "Double Penalty"
+          }
+        }
+      }
+    ],
+    "translations": {
+      "de": {
+        "name": "blind_football",
+        "period_label": "Halbzeit",
+        "break_label": "Halbzeitpause",
+        "hint": ""
+      },
+      "en": {
+        "name": "blind_football",
+        "period_label": "Half",
+        "break_label": "Half-time",
+        "hint": ""
+      },
+      "cs": {
+        "name": "blind_football",
+        "period_label": "Poločas",
+        "break_label": "Poločasová přestávka",
+        "hint": ""
+      }
+    }
+  }
 }
 ```
 
@@ -56,8 +177,8 @@ zusätzlich die gesamte `referees`-Liste; dort und in `/matches` bleiben
 `left/right.counters` liefern nur die aktuellen Werte; `counter_states` enthält
 je Counter `normal`, `warning` oder `critical` (Critical hat Vorrang).
 Ohne konfigurierten Counter sind beide Objekte leer. Eine abfragende Anwendung muss keine Periodenhistorie
-auswerten. Das gesamte Profil und die Historie stehen im Tournament-State bzw.
-Export zur Verfügung.
+auswerten. Das Profil steht zusätzlich unter `sport_profile` in der Live-Ausgabe; die Historie
+steht im Tournament-State beziehungsweise Export.
 
 ### Spielperiode, Turnierphase, Runde und Officials-Funktion
 
@@ -69,7 +190,9 @@ Die folgenden Metadaten stehen ab `scheduled` bereit; bei `idle` sind
 | `period_info.number` | identisch mit `period` |
 | `period_info.intermission` | `true` während einer ausdrücklich gesetzten Pause zwischen zwei Wettkampfabschnitten |
 | `period_info.code` | stabiler Code, siehe unten |
-| `period_info.label_en` | englisches Label oder `null` |
+| `period_info.label_en` | englischer Abschnitts- oder Pausentext |
+| `period_info.labels` | konfigurierte Anzeigetexte für `de`, `en`, `cs` |
+| `sport_profile` | aufbereitetes Veranstaltungsprofil oder `null` |
 | `stage` | Turnierphase: `code`, `name` (Originaltext), `label_en`; `null` ohne Angabe |
 | `round` | Gruppe bzw. Spielrunde aus `match.round`, gleiche Struktur wie `stage` |
 | `officials[].position` | Reihenfolge im Spiel ab 1, keine Funktion |
@@ -78,48 +201,44 @@ Die folgenden Metadaten stehen ab `scheduled` bereit; bei `idle` sind
 `period_info.code` richtet sich nach bestehendem Spielstatus, `period` und
 `intermission`:
 
-| Situation | Halbzeit-Profil | anderes oder kein Profil |
-|---|---|---|
-| `scheduled`, `ready` | `not_started` · „Not started“ | `not_started` · `null` |
-| `live`/`paused`, Abschnitt 1 | `first_half` · „1st half“ | `period_1` · `null` |
-| `live`/`paused` mit `intermission` | `half_time` · „Half-time“ | `intermission_after_1` · `null` |
-| `live`/`paused`, Abschnitt 2 | `second_half` · „2nd half“ | `period_2` · `null` |
-| `finished` | `full_time` · „Full-time“ | `finished` · `null` |
+| Situation | Code |
+|---|---|
+| `scheduled`, `ready` | `not_started` |
+| laufender Abschnitt n | `period_n` |
+| Pause nach Abschnitt n | `intermission_after_n` |
+| `finished` | `finished` |
 
-Ein **Halbzeit-Profil** liegt vor, wenn `sport_profile.periods` genau 2 ist und
-`period_label` (ohne Groß-/Kleinschreibung) `Halbzeit`, `Half` oder `Poločas` lautet.
-Das ist bei Prag der Fall. Boxen, Showdown oder Profile mit „Runde“/„Satz“
-erhalten keine Fußball-Labels, sondern nur neutrale Codes. `paused` ist eine
-Legacy-Status und erzeugt **nicht** „Half-time“. Diese bisherigen Halbzeit-Codes
-bleiben für externe Anwendungen erhalten. Die Bedienoberfläche leitet ihre
-Abschnittsbegriffe ausschließlich aus dem Sportprofil ab, nicht aus diesen Codes.
+Für alle Profile gilt dieselbe Zuordnung. `period_info.labels` enthält DE/EN/CS:
+zum Beispiel `{"de":"2. Runde","en":"2. Round","cs":"2. Kolo"}`. Während einer
+Abschnittspause enthält es stattdessen die Pausenbezeichnung. `label_en` entspricht
+`labels.en`; Status und Abschnittsnummer werden separat geliefert.
+
+`sport_profile` enthält das vollständige Veranstaltungsprofil mit allen aufgelösten
+Übersetzungen, der Gesamtzahl der Abschnitte und den Counterdefinitionen. Es steht
+auch ohne ausgewähltes Spiel bereit; ohne Profil ist es `null`. Eine externe Anzeige
+kann ihre Sprache selbst wählen. Schwellen erzeugen nur `counter_states`, keine Regeln.
 
 ### Kompatibilität: Abschnittspausen und Wiederöffnen (Issue #5)
 
-Das JSON-Format bleibt Schema-Version 1. Feldnamen und Typen der Live-API bleiben
-erhalten; es kommen keine neuen Felder hinzu. Die bisherigen `period_info.code`-
-und `label_en`-Zuordnungen bleiben unverändert. Anzahl und Abschnittsbezeichnung
-stehen weiterhin in `event.sport_profile` des Tournament-Snapshots beziehungsweise Exports.
-
-Bewusste Verhaltensänderungen:
+Die Veranstaltung bleibt Schema-Version 1. Version **0.2.0** erweitert Profile um
+`translations` und die Live-Ausgabe um `sport_profile` und `period_info.labels`.
+Es gibt keine feste Halbzeit-Sonderbehandlung mehr: `first_half`, `second_half`,
+`half_time` und `full_time` werden durch die oben dokumentierten generischen Codes
+ersetzt. `label_en` enthält nun den konfigurierten Abschnitts- oder Pausentext.
+Ältere Clients müssen bei Bedarf angepasst werden; ein Kompatibilitätsmodus ist nicht vorgesehen.
+Die installierte Softwareversion steht unter `GET /api/version`.
 
 - Wiederöffnen führt unmittelbar von `finished` nach `live`.
-- `GET /api/v1/live` sowie das `live`-Objekt in HTTP-/WebSocket-Snapshots liefern
-  für alte interne `paused`-Stände ebenfalls `status: "live"`. Der Wettkampf ist
-  laufend; eine Abschnittspause wird ausschließlich durch
-  `period_info.intermission: true` angezeigt. `status: "live"` allein bedeutet
-  deshalb nicht, dass gerade ein Abschnitt aktiv ausgetragen wird.
-- Rohe Match-Daten unter `/matches`, im Tournament-State und im Export behalten
-  einen vorhandenen `paused`-Wert. Es wird keine Bestandsdatei beim Lesen umgeschrieben.
-- `POST /api/v1/live/pause` und `/resume` bleiben mit ihren bisherigen Validierungen
-  und internen Übergängen verfügbar, sind in OpenAPI aber als veraltet markiert.
-  Sie setzen keine Abschnittspause und haben keine Schaltfläche mehr in der GUI.
+- Alte interne `paused`-Stände werden in der gemeinsamen Live-Projektion als `live`
+  dargestellt. Eine Abschnittspause wird ausschließlich durch
+  `period_info.intermission: true` angezeigt. Rohe Match-Daten und Exporte behalten
+  den gespeicherten Wert; Lesen schreibt keine Datei um.
+- Die bereits veralteten `pause`-/`resume`-Endpunkte existieren noch für gespeicherte
+  Zustände, sind kein Bedienweg und setzen keine Abschnittspause.
+- Die API erlaubt den direkten nächsten Abschnitt; die GUI führt ihn über die Pause.
 
-Externe Anwendungen, die `paused` besonders darstellen oder nach Wiederöffnen
-automatisch `resume` senden, müssen diesen Ablauf anpassen. Anzeigen der tatsächlichen
-Abschnittspause sollen `period_info.intermission` auswerten. Score, Seiten, Counter,
-Periodennummer und Officials bleiben unverändert. Die API erlaubt weiterhin den
-direkten Wechsel zum nächsten Abschnitt; nur die GUI führt ihn über die Abschnittspause.
+Score, Seiten, Counterwerte und Officials bleiben erhalten. Bestehende Veranstaltungsdateien,
+auch die Prag-Beispiele, bleiben ladbar und unabhängig von der neuen Profilbibliothek.
 
 Für `stage` und `round` gilt diese feste Zuordnung (Vergleich ohne Groß-/Kleinschreibung,
 Originaltext bleibt in `name` erhalten):
@@ -310,3 +429,28 @@ Ein Admin mit Startpasswort kann zunächst nur dessen Änderung durchführen.
 `POST /api/auth/password` erwartet `username`, `password`, `repeat` und den
 CSRF-Header. Bei eigener Änderung meldet `reauthenticate: true` den nötigen
 erneuten Login. [Passwörter und Betrieb](INSTALLATION.md#benutzer-und-passwörter).
+
+## Sportprofilverwaltung (Admin)
+
+Die normale Einrichtung erfolgt über die Weboberfläche. Für Integrationen:
+
+- `GET /api/v1/sport-profiles`: `revision`, `profiles` mit `id` und `profile`;
+  zusätzlich `event_profiles` als unabhängige Vorlagen aus Veranstaltungen.
+- `POST /api/v1/sport-profiles/save`: `id`, `profile`, `request_id`,
+  `catalog_session` und `expected_revision` der **Bibliothek**. Neue ID legt ein Profil an,
+  vorhandene ID bearbeitet es.
+- `POST /api/v1/sport-profiles/delete`: dieselben Kontrollfelder, ohne `profile`.
+- `POST /api/v1/config/sport-profile`: übliche Veranstaltungskontext- und
+  Revisionsfelder, `data: {"sport_profile": {…}}` oder `null`. Speichert eine Kopie;
+  kein dauerhafter Verweis auf ein Bibliotheksprofil.
+
+Alle diese Endpunkte verlangen Admin-Rechte und bei Mutationen CSRF-Schutz.
+Operatoren dürfen ein Profil auch nicht über `config/event`, Neuanlage oder Import
+ändern. Anlegen/Importieren/Ersetzen/Zurücksetzen von Veranstaltungen ist Admin-only;
+Auswahl, Export, normale Detailpflege und Live-Bedienung bleiben für Operatoren verfügbar.
+
+Bibliothek und Veranstaltung haben getrennte Revisionen. Speichern ist atomar;
+`409` verhindert das Überschreiben eines inzwischen geänderten Profils. Änderungen
+an der Bibliothek ändern keine Veranstaltungsdaten. Eine Veranstaltungskopie erlaubt
+Text- und Schwellenpflege auch während des Wettkampfs; verwendete Strukturänderungen
+werden mit `409` abgewiesen. [Änderungsregeln](OPERATOR.md#sportprofile-verwalten-admin).

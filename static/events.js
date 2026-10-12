@@ -3,6 +3,7 @@ import { csrfHeaders, isAdmin } from './auth-client.js';
 import { $, escape as e, Connection, message } from './common.js';
 let preview = null, uploadGeneration = 0, resetTarget = null;
 const app = new Connection(render);
+$('#new-event').hidden = $('#json-import').hidden = !isAdmin();
 function description(event) {
   return `${e(event?.date_from || '')}${event?.date_to !== event?.date_from ? ' – ' + e(event?.date_to || '') : ''}${event?.location ? ' · ' + e(event.location) : ''}`;
 }

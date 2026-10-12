@@ -79,7 +79,8 @@ und Exporte behalten den gespeicherten Wert. Es ist keine Datenmigration erforde
 ## Sportprofil
 
 `event.sport_profile` konfiguriert Abschnitte und teilnehmerbezogene Zähler.
-Es wird per Veranstaltungs-JSON oder API gesetzt. Beispiel:
+Der Admin pflegt es über **Konfiguration → Sportprofile**. Die Veranstaltung speichert
+eine vollständige Kopie, ohne Laufzeitverweis auf die Bibliothek. Beispiel:
 
 ```json
 {
@@ -87,6 +88,11 @@ Es wird per Veranstaltungs-JSON oder API gesetzt. Beispiel:
   "ruleset": "IBSA 2025-2029",
   "periods": 2,
   "period_label": "Halbzeit",
+  "translations": {
+    "de": {"name": "Blindenfußball", "period_label": "Halbzeit", "break_label": "Halbzeitpause", "hint": ""},
+    "en": {"name": "Blind football", "period_label": "Half", "break_label": "Half-time", "hint": ""},
+    "cs": {"name": "Fotbal nevidomých", "period_label": "Poločas", "break_label": "Poločasová přestávka", "hint": ""}
+  },
   "counters": [
     {
       "id": "team_fouls",
@@ -96,13 +102,20 @@ Es wird per Veranstaltungs-JSON oder API gesetzt. Beispiel:
       "warning_at": 4,
       "critical_at": 5,
       "warning_label": "Nächstes Foul → Double Penalty",
-      "critical_label": "Double Penalty"
+      "critical_label": "Double Penalty",
+      "translations": {
+        "de": {"label": "Fouls", "warning_label": "Nächstes Foul → Double Penalty", "critical_label": "Double Penalty"},
+        "en": {"label": "Fouls", "warning_label": "Next foul → Double Penalty", "critical_label": "Double Penalty"},
+        "cs": {"label": "Fauly", "warning_label": "Další faul → Double Penalty", "critical_label": "Double Penalty"}
+      }
     }
   ]
 }
 ```
 
-`sport` und `ruleset` sind beschreibende Metadaten. `periods` ist positiv,
+`sport` und `ruleset` bleiben für Bestandsdateien als beschreibende Metadaten erhalten.
+Sie wählen keine Programmfunktion und werden im Editor nicht benötigt. Neue Profile
+verwenden zunächst `sport: "generic"`; der sichtbare Name steht in `translations`. `periods` ist positiv,
 `period_label` frei wählbar, Counter-IDs sind eindeutig. Unterstützt wird
 `scope: "participant"`. Warnschwellen sind Anzeigehilfen, keine Obergrenzen
 und keine automatische Sportregel. Wenn beide Schwellen gesetzt sind, muss
@@ -119,7 +132,11 @@ Abschnitt 1 und Nullwerte.
 `intermission` kennzeichnet ausschließlich eine Pause vor dem nächsten Abschnitt.
 Ein Abschnittswechsel und das Spielende setzen sie zurück. Wiederöffnen setzt den
 Status direkt auf `live` und stellt keine frühere Abschnittspause automatisch wieder her.
-Nach Spielbeginn kann das Profil nicht mehr geändert werden.
+Die Struktur (`periods`, Counter-IDs und `reset_each_period`) ist ab Vorbereitung
+festgelegt; nach Zurücknehmen der Vorbereitung ist sie wieder bearbeitbar, sofern
+noch kein Spiel begonnen hat. Texte, Schwellen und Zählerreihenfolge bleiben bearbeitbar.
+Vor dem ersten Spiel werden bei Strukturänderungen nur leere Counterhistorien
+neu initialisiert. Erfasste Werte werden niemals durch Profilpflege gelöscht.
 
 Ohne Profil gelten ein Abschnitt und keine Zähler. Fehlende optionale Felder
 werden kompatibel ergänzt: `referees`/`officials` als leere Listen,
@@ -127,12 +144,39 @@ werden kompatibel ergänzt: `referees`/`officials` als leere Listen,
 Phasen-/Rundenlabels als `""`. Die Schema-Version bleibt 1;
 unbekannte Versionen werden abgewiesen.
 
+### Mehrsprachigkeit und Bibliothek
+
+Ein Profil enthält alle Sprachen unter `translations.de`, `.en` und `.cs`:
+`name`, `period_label`, `break_label` und `hint`. Counter verwenden dort
+`label`, `warning_label` und `critical_label`. Keine separaten Sprachdateien.
+Abschnittsnummern gehören weiterhin zum Match (`period`), nicht zur Vorlage.
+
+Die bisherigen skalaren Texte bleiben als Fallback erhalten. Fehlende Übersetzungen
+werden beim Anzeigen ergänzt: bekannte Begriffe werden übersetzt, eigene Texte bleiben
+unverändert; leere Warntexte erhalten einen neutralen Hinweis. Lesen schreibt keine
+Dateien um. Speichern im Editor hält alle drei Sprachen gemeinsam im Profil fest.
+
+`data/sport-profiles.json` enthält `schema_version: 1`, eine eigene `revision` und
+`profiles: [{"id": "…", "profile": {…}}]`. Die Bibliothek startet leer, wenn die Datei
+fehlt, und wird erst durch Speichern angelegt. Eingebettete Profile werden als Vorlagen
+angeboten, ohne automatische Migration oder Kopplung. Neue Bibliotheks-IDs und Counter-IDs
+werden in der GUI erzeugt; beim Bearbeiten bleiben sie stabil. Eine zentrale Datei ist
+für diese kleine Bibliothek einfacher atomar zu speichern und zu sichern als mehrere Dateien.
+
+Prag-JSON-Dateien bleiben unverändert ladbar. Teilnehmer, Paarungen, Play Areas und
+Officials sind sportartenneutral; eine noch nicht gestartete Veranstaltung kann beispielsweise
+auf drei Runden und eigene Counter umgestellt werden. Beschreibungen wie `Field 1` oder
+`Gruppenphase` werden dabei nicht automatisch in Boxbegriffe umgeschrieben.
+Eine bereits gespielte Veranstaltung dient als Archiv, nicht als Vorlage für eine
+andere Wettkampfstruktur; dafür eine neue Veranstaltung samt Spielplan anlegen.
+
 ## Dateien und Migration
 
 ```text
 data/
   events/<event-id>.json
   imports/<event-id>.json
+  sport-profiles.json        # unabhängig gespeicherte Vorlagen, optional
   active-event.json
   active-event.json.lock
   tournament.json          # gegebenenfalls unveränderte Legacy-Datei

@@ -164,11 +164,11 @@ class AuthTest(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.text)
         return response.json()
 
-    def test_both_roles_have_full_event_and_live_permissions(self):
+    def test_both_roles_can_configure_existing_events_and_operate(self):
+        self.admin()
         for role in ('operator','admin'):
             with self.subTest(role=role):
-                if role=='admin': self.admin()
-                else: self.login(role)
+                self.login('admin',password=NEW_PASSWORD)
                 for path in ('/','/events','/config','/api/v1/tournament','/api/v1/matches'):
                     self.assertEqual(self.client.get(path).status_code,200,path)
                 created=self.business_request('event-catalog/create',event=dict(name=role+' cup',date_from='2026-10-03',date_to='2026-10-04'))['created_event_id']
@@ -183,8 +183,9 @@ class AuthTest(unittest.TestCase):
                 state=self.client.get('/api/v1/tournament').json()
                 self.business_request('event-catalog/select',event_id=imported,selection_token=state['selection_token'])
                 state=self.client.get('/api/v1/tournament').json()
+                self.login(role,password=NEW_PASSWORD if role == 'admin' else 'operator')
                 event=state['event'];event['name']='Corrected name';event['location']='Corrected place'
-                event['sport_profile']['ruleset']='Configured rules'
+                if role == 'admin': event['sport_profile']['ruleset']='Configured rules'
                 self.business_request('config/event',data=event)
                 self.business_request('config/participants',data=dict(id='bsc-praha',name='Corrected participant'))
                 self.business_request('config/participants',data=dict(id='extra',name='Extra participant'))
@@ -206,7 +207,9 @@ class AuthTest(unittest.TestCase):
                 self.assertEqual(exported.json()['event']['name'],'Corrected name')
                 self.assertEqual(exported.json()['matches'][0]['scores']['bsc-praha'],1)
                 # Nur der Admin darf eine Veranstaltung durch eine Importdatei ersetzen (Reset nach Tests).
+                self.login('admin',password=NEW_PASSWORD)
                 preview=self.client.post('/api/v1/event-catalog/import/preview',json=dict(json_text=raw,event_id=imported),headers=self.headers()).json()
+                self.login(role,password=NEW_PASSWORD if role == 'admin' else 'operator')
                 state=self.client.get('/api/v1/tournament').json()
                 response=self.client.post('/api/v1/event-catalog/replace',json=dict(request_id=str(uuid4()),catalog_session=state['stream_id'],
                                           json_text=raw,event_id=imported,preview_token=preview['preview_token']),headers=self.headers())

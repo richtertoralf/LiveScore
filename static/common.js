@@ -36,6 +36,7 @@ export class Connection {
       button.disabled = !canOperate() || !this.online || this.busy || button.dataset.disabled === 'true';
     });
     if ($('#import-file')) $('#import-file').disabled = !this.online || this.busy;
+    for (const control of document.querySelectorAll('#profile-edit, #profile-source')) control.disabled = !this.online || this.busy;
   }
   accept(state, initial = false) {
     if (!initial && this.state && (state.stream_id !== this.state.stream_id || state.stream_revision <= this.state.stream_revision)) return;
@@ -70,7 +71,8 @@ export class Connection {
     if (!this.state || !this.online || this.busy) return false;
     this.busy = true; this.controls(); message('');
     const catalog = path.startsWith('event-catalog/');
-    const payload = {request_id: uuid(), ...(catalog ? {catalog_session:this.state.stream_id} : context), ...fields};
+    const profile = path.startsWith('sport-profiles/');
+    const payload = {request_id: uuid(), ...(catalog || profile ? {catalog_session:this.state.stream_id} : context), ...fields};
     if (!catalog && !path.endsWith('/score') && !path.endsWith('/counter')) payload.expected_revision = revision;
     try {
       let response;
@@ -89,7 +91,7 @@ export class Connection {
         return false;
       }
       this.accept(data);
-      if (!catalog && this.state.selection_token !== context.selection_token) {
+      if (!catalog && !profile && this.state.selection_token !== context.selection_token) {
         message(t('Veranstaltung wurde inzwischen gewechselt. Bitte aktuellen Stand prüfen.')); return false;
       }
       return data;

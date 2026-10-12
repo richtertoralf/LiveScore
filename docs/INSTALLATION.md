@@ -211,7 +211,7 @@ TLS, Zertifikate und Firewall richtet der Betreiber ein.
 
 | Benutzer | Startpasswort | Berechtigung |
 |---|---|---|
-| `operator` | `operator` | Veranstaltungsdaten bearbeiten und Spiele bedienen |
+| `operator` | `operator` | Bestehende Veranstaltungsdetails bearbeiten, auswählen, exportieren und Spiele bedienen |
 | `admin` | `admin` | zusätzlich Passwörter verwalten und Veranstaltungen zurücksetzen/ersetzen |
 
 Beim ersten Admin-Login führt LiveScore zu `/users`. Zuerst das eigene Passwort
@@ -233,6 +233,14 @@ eine Anmeldung. `/docs`, `/redoc` und `/openapi.json` sind Admin-only.
 Details zur Anmeldung eigener Clients stehen in der [API](API.md#anmeldung-eigener-clients).
 Bei ausdrücklich deaktiviertem Auth sind Fachfunktionen ohne Login verfügbar,
 die Passwortverwaltung ist deaktiviert.
+
+Sportprofile sowie Anlegen und Importieren von Veranstaltungen sind Admin-Aufgaben.
+Die Profilbibliothek liegt in `data_dir/sport-profiles.json` und ist in den vorhandenen
+Daten-Backups und Upgrade-Sicherungen enthalten. **Version 0.2.0** kann über
+`sudo livescore --upgrade` von GitHub/main installiert werden; bestehende
+Veranstaltungen benötigen keine manuelle Migration. Die geänderten generischen
+[Abschnittscodes der API](API.md#kompatibilität-abschnittspausen-und-wiederöffnen-issue-5)
+sollten externe Anzeigen berücksichtigen.
 
 ### Admin-Passwort vergessen
 

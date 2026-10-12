@@ -10,7 +10,8 @@ from uuid import UUID, uuid4
 from pydantic import Field, TypeAdapter
 
 from . import storage
-from .models import Event, ID, Model, State
+from .models import Count, Event, ID, Model, SportProfile, State
+from .profiles import ProfileEntry, ProfileLibrary, save_library
 from .service import Conflict, Service, current_match, persist
 
 
@@ -52,6 +53,15 @@ class ResetEvent(CatalogCommand):
     event_id: ID
 
 
+class ProfileCommand(CatalogCommand):
+    expected_revision: Count
+    id: ID
+
+
+class SaveProfile(ProfileCommand):
+    profile: SportProfile
+
+
 def event_id_for(state):
     event = state.event
     name = event.name if event else 'Veranstaltung'
@@ -72,6 +82,11 @@ class Catalog(Service):
     def __init__(self, directory, legacy):
         # The application holds the catalogue and legacy process leases first.
         self.directory = directory
+        self.profiles_path = directory / 'sport-profiles.json'
+        if self.profiles_path.is_symlink():
+            raise ValueError('Profilbibliothek darf kein symbolischer Link sein.')
+        self.profiles = (ProfileLibrary.model_validate_json(self.profiles_path.read_text(encoding='utf-8'))
+                         if self.profiles_path.exists() else ProfileLibrary())
         self.events_dir = directory / 'events'
         # Kopie der zuletzt importierten Datei je Veranstaltung; Grundlage für „Zurücksetzen“.
         self.imports_dir = directory / 'imports'
@@ -130,7 +145,41 @@ class Catalog(Service):
     def view(self):
         return dict(super().view(), active_event_id=self.selection.active_event_id,
                     selection_token=str(self.selection.selection_token), catalog=self.listing(),
-                    stream_id=self.stream_id, stream_revision=self.stream_revision)
+                    stream_id=self.stream_id, stream_revision=self.stream_revision,
+                    profile_library_revision=self.profiles.revision)
+
+    async def profile_apply(self, operation, command):
+        signature = hashlib.sha256(('profile/' + operation + command.model_dump_json()).encode()).hexdigest()
+        async with self.lock:
+            if str(command.catalog_session) != self.stream_id:
+                raise Conflict('Server wurde neu gestartet. Katalog prüfen und Aktion erneut vorbereiten.')
+            previous = self.receipts.get(str(command.request_id))
+            if previous:
+                if previous[0] != signature:
+                    raise Conflict('Request-ID bereits für eine andere Katalogaktion verwendet.')
+                return self.view()
+            if command.expected_revision != self.profiles.revision:
+                raise Conflict('Profilbibliothek wurde inzwischen geändert. Profil erneut laden.')
+            candidate = self.profiles.model_copy(deep=True)
+            old = next((entry for entry in candidate.profiles if entry.id == command.id), None)
+            if operation == 'delete':
+                if old is None:
+                    raise Conflict('Sportprofil nicht gefunden.')
+                candidate.profiles.remove(old)
+            else:
+                entry = ProfileEntry(id=command.id, profile=command.profile)
+                if old:
+                    candidate.profiles[candidate.profiles.index(old)] = entry
+                else:
+                    candidate.profiles.append(entry)
+            candidate.revision += 1
+            cancelled = await persist(save_library, self.profiles_path, candidate)
+            self.profiles = candidate
+            self.receipts[str(command.request_id)] = (signature, None)
+            result = self.changed()
+            if cancelled:
+                raise asyncio.CancelledError
+            return result
 
     def changed(self):
         if self.selection.active_event_id:

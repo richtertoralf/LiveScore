@@ -110,7 +110,7 @@ async def run(executable, language_filter=None):
                             if label:
                                 await expect(a.locator('[data-action=start]')).to_have_text(start_label(1))
                                 # A custom label must not accidentally become another UI translation.
-                                assert await a.evaluate("async () => (await import('/static/i18n.js')).periodLabel('Name')") == 'Name'
+                                assert await a.evaluate("async () => (await import('/static/i18n.js')).profileText({translations:{en:{period_label:'Name'},de:{period_label:'Name'},cs:{period_label:'Name'}}},'period_label')") == 'Name'
                             await click(a, 'start')
                             await expect(b.locator('.status')).to_have_text('LIVE' if language != 'cs' else 'ŽIVĚ')
                             if sport == 'boxing':

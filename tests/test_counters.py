@@ -110,19 +110,21 @@ class CounterTest(unittest.TestCase):
         self.assertEqual(live['right']['id'], 'bsc-praha')
         self.assertEqual(live['right']['counters'], {'team_fouls': 3})
         self.assertEqual(live['left']['counters'], {'team_fouls': 1})
-        self.action('pause')
+        self.action('intermission',intermission=True)
         self.action('period', period=2)
         after = self.state()['matches'][0]
-        self.assertEqual(after['status'], 'paused')  # Legacy-State; live projection is canonical.
+        self.assertEqual(after['status'], 'live')
         self.assertEqual(after['side_l'], 'fc-ingolstadt-04')
         self.assertEqual(after['scores'], before['scores'])
         self.assertEqual(after['officials'], before['officials'])
         self.assertEqual(after['counters']['team_fouls']['bsc-praha'], {'1': 3, '2': 0})
         self.assertEqual(self.state()['live']['right']['counters'], {'team_fouls': 0})
-        self.counter(); self.action('resume')
+        self.counter()
         expected = self.state()
         self.restart()
         restored = self.state()
+        self.assertNotEqual(restored['live']['source']['instance_id'],expected['live']['source']['instance_id'])
+        expected['live']['source']=restored['live']['source']
         for key in ('matches', 'event', 'participants', 'referees', 'live'):
             self.assertEqual(restored[key], expected[key])
         self.assertEqual(load(self.path).matches[0].counters['team_fouls']['bsc-praha'], {'1': 3, '2': 1})
@@ -152,7 +154,7 @@ class CounterTest(unittest.TestCase):
 
     def test_stale_counter_after_side_switch_pause_and_period(self):
         self.start()
-        for operation, fields in [('switch-sides', {}), ('pause', {}), ('resume', {}), ('period', {'period':2})]:
+        for operation, fields in [('switch-sides', {}), ('intermission', {'intermission':True}), ('intermission', {'intermission':False}), ('period', {'period':2})]:
             old = self.payload()
             self.action(operation, **fields)
             self.assertEqual(self.client.post('/api/v1/live/counter', json=old).status_code, 409)

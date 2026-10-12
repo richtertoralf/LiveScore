@@ -1,4 +1,4 @@
-"""Installer-only validation and first seed; normal server starts never seed."""
+"""Installer-Prüfung und Veranstaltungsseed; gemeinsame Standardprofil-Bereitstellung."""
 import argparse
 from contextlib import ExitStack
 import json
@@ -11,7 +11,7 @@ from .auth import Credentials
 from .catalog import Selection, save_selection
 from .config import load_config
 from .models import State
-from .profiles import ProfileLibrary
+from .profiles import ProfileLibrary, provision_profiles
 from .storage import FileLease, load, save
 
 
@@ -73,9 +73,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', required=True, type=Path)
     parser.add_argument('--seed', type=Path)
+    parser.add_argument('--profiles', action='store_true')
     args = parser.parse_args()
     try:
-        if args.seed:
+        if args.profiles:
+            config = inspect_config(args.config)
+            with ExitStack() as stack:
+                for path in (config.data_dir / 'active-event.json', config.data_file or config.data_dir / 'tournament.json'):
+                    lease = FileLease(path); lease.acquire(); stack.callback(lease.release)
+                provision_profiles(config.data_dir / 'sport-profiles.json')
+            print('Standardprofile bereitgestellt.')
+        elif args.seed:
             print('Prag vorbereitet.' if seed_if_empty(args.config, args.seed) else 'Vorhandene Daten unverändert.')
         else:
             config = inspect_config(args.config)

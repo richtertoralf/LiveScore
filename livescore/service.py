@@ -79,39 +79,61 @@ def period_info(match, profile):
     else:
         code = f"period_{match.period}"
     display = display_profile(profile or SportProfile())
-    labels = {lang: text['break_label'] if match.intermission else f"{match.period}. {text['period_label']}"
+    period_labels = {lang: (f"{text['period_label']} {match.period}" if lang == 'en'
+                            else f"{match.period}. {text['period_label']}")
+                     for lang, text in display['translations'].items()}
+    labels = {lang: text['break_label'] if match.intermission else period_labels[lang]
               for lang, text in display['translations'].items()}
-    return dict(number=match.period, intermission=match.intermission, code=code,
+    return dict(number=match.period, total=profile.periods if profile else 1,
+                intermission=match.intermission, code=code, period_labels=period_labels,
                 label_en=labels['en'], labels=labels)
 
 
 def live_view(state):
     match = current_match(state)
     profile = state.event.sport_profile if state.event else None
+    settings = profile or SportProfile()
+    vocabulary = display_profile(settings) if state.event else None
+    if vocabulary:
+        for labels in vocabulary['translations'].values():
+            if settings.score_mode != 'none':
+                labels['score_label'] = labels['score_label'] or state.event.score_label
     result = dict(status="idle", revision=state.revision, match_id=None,
-                  play_area=None, left=None, right=None, officials=[], period=None,
-                  period_info=None, stage=None, round=None, sport_profile=display_profile(profile))
+                  play_area=None, left=None, right=None, officials=[] if settings.show_officials else None, period=None,
+                  period_info=None, stage=None, round=None, sport_profile=vocabulary,
+                  pairing_confirmed=False,
+                  display=dict(score=settings.score_mode != "none", score_mode=settings.score_mode,
+                               sets=settings.sets_enabled, counters=[c.id for c in settings.counters if c.enabled],
+                               details=settings.show_details, officials=settings.show_officials) if state.event else None)
     if match is None:
         return result
     # Legacy paused states remain editable; the live contract describes an ongoing match.
     result.update(status="live" if match.status == "paused" else match.status, match_id=match.id, period=match.period,
                   play_area=next(a.model_dump() for a in state.play_areas if a.id == match.play_area_id),
                   period_info=period_info(match, profile),
-                  stage=term(match.stage, match.stage_label), round=term(match.round, match.round_label))
+                  stage=term(match.stage, match.stage_label) if settings.show_details else None,
+                  round=term(match.round, match.round_label) if settings.show_details else None,
+                  pairing_confirmed=match.side_l is not None and match.side_r is not None)
     referees = {referee.id: referee for referee in state.referees}
     # Officials sind im Modell ausschließlich Einträge der Referee-Liste; position = Reihenfolge im Spiel.
     result["officials"] = [dict(referees[referee_id].model_dump(), position=index, role="referee",
                                 role_label_en="Referee")
-                           for index, referee_id in enumerate(match.officials, start=1)]
+                           for index, referee_id in enumerate(match.officials, start=1)] if settings.show_officials else None
     for key, pid in (("left", match.side_l), ("right", match.side_r)):
         if pid:
             participant = next(p for p in state.participants if p.id == pid)
-            definitions = state.event.sport_profile.counters if state.event.sport_profile else []
+            definitions = [c for c in settings.counters if c.enabled]
             counters = {d.id: counter_value(match, d, pid) for d in definitions}
             result[key] = dict(id=pid, name=participant.name, short_name=participant.short_name,
-                               country_code=participant.country_code, score=match.scores[pid],
+                               country_code=participant.country_code,
+                               score=match.scores[pid] if settings.score_mode != 'none' else None,
                                counters=counters,
-                               counter_states={d.id: counter_level(d, counters[d.id]) for d in definitions})
+                               counter_states={d.id: counter_level(d, counters[d.id]) for d in definitions},
+                               sets_won=match.sets_won.get(pid) if settings.sets_enabled else None,
+                               period_scores=({p: values[pid] for p, values in match.period_scores.items()}
+                                              if settings.score_mode == 'period' else None),
+                               role=next((dict(id=definition.id, labels=definition.labels) for role, definition in settings.roles.items()
+                                          if getattr(match, role) == pid), None))
     return result
 
 
@@ -120,7 +142,7 @@ def snapshot(state):
     data["live"] = live_view(state)
     match = current_match(state)
     data["can_undo"] = bool(match and match.status in ("live", "paused") and any(
-        not e.undone for e in state.score_events(match.id)))
+        not e.undone for e in state.point_events(match.id)))
     return data
 
 
@@ -150,7 +172,12 @@ class Service:
         return queue
 
     def view(self):
-        return snapshot(self.state)
+        result = snapshot(self.state)
+        result['live'] = self.live()
+        return result
+
+    def live(self):
+        return live_view(self.state)
 
     def check_context(self, command):
         """Der Veranstaltungskatalog ergänzt die Prüfung der aktiven Auswahl."""
@@ -173,7 +200,7 @@ class Service:
                 if previous.signature != signature:
                     raise Conflict("Request-ID wurde bereits für eine andere Aktion verwendet.")
                 return self.view()
-            if operation not in ("score", "counter") and command.expected_revision != self.state.revision:
+            if operation not in ("score", "counter", "sets") and command.expected_revision != self.state.revision:
                 raise Conflict("Zustand wurde inzwischen geändert. Bitte Anzeige prüfen und erneut bedienen.")
             candidate = self.state.model_copy(deep=True)
             event_data = self.mutate(candidate, operation, command)
@@ -194,13 +221,15 @@ class Service:
         old = state.event.sport_profile
         if structure(old) != structure(profile):
             if any(m.status != 'scheduled' for m in state.matches):
-                raise Conflict('Abschnittsanzahl, Zähler und Rücksetzverhalten sind nach Vorbereitung oder Spielbeginn festgelegt. Bezeichnungen und Anzeigegrenzen bleiben bearbeitbar.')
+                raise Conflict('Erfassungsstruktur ist nach Vorbereitung oder Spielbeginn festgelegt. Bezeichnungen und Anzeigeoptionen bleiben bearbeitbar.')
             # Only unstarted matches: replace empty initialized histories, never real results.
             if any(value for m in state.matches for values in m.counters.values()
                    for history in values.values() for value in history.values()):
                 raise Conflict('Vorhandene Counterwerte dürfen durch Profiländerungen nicht verloren gehen.')
             for match in state.matches:
                 match.counters = {}
+                match.period_scores = {}
+                match.sets_won = {}
                 initialize_period(match, profile)
         state.event.sport_profile = profile
 
@@ -268,9 +297,9 @@ class Service:
         allowed = {
             "prepare": {"scheduled", "ready"}, "unprepare": {"ready"},
             "start": {"ready"}, "score": {"live", "paused"},
+            "sets": {"live", "paused"},
             "counter": {"live", "paused"}, "period": {"live", "paused"},
             "intermission": {"live", "paused"},
-            "pause": {"live"}, "resume": {"paused"},
             "switch-sides": {"ready", "live", "paused"},
             "undo": {"live", "paused"}, "finish": {"live", "paused"},
             "reopen": {"finished"},
@@ -286,6 +315,10 @@ class Service:
             match.side_r = command.side_r
             match.scores = {command.participant_1: 0, command.participant_2: 0}
             match.counters = {}
+            match.period_scores = ({"1": dict(match.scores)} if state.event.sport_profile
+                                   and state.event.sport_profile.score_mode == "period" else {})
+            match.sets_won = (dict(match.scores) if state.event.sport_profile
+                              and state.event.sport_profile.sets_enabled else {})
             initialize_period(match, state.event.sport_profile)
             match.status = "ready"
         elif operation in ("unprepare", "reset"):
@@ -293,6 +326,8 @@ class Service:
             match.side_l = match.side_r = None
             match.scores = {}
             match.counters = {}
+            match.period_scores = {}
+            match.sets_won = {}
             match.period = 1
             match.intermission = False
             if operation == "reset":
@@ -300,24 +335,33 @@ class Service:
         elif operation == "start":
             match.status = "live"
             event["type"] = "match_started"
-        elif operation == "score":
+        elif operation in ("score", "sets"):
             if command.control_revision != match.control_revision:
                 raise Conflict("Spielzustand oder Seiten wurden geändert. Bitte Anzeige prüfen.")
             pid = match.side_l if command.side == "L" else match.side_r
             if command.participant_id != pid:
                 raise Conflict("Teilnehmer steht nicht mehr auf dieser Seite.")
-            if match.scores[pid] + command.delta < 0:
+            profile = state.event.sport_profile or SportProfile()
+            if operation == "score" and (profile.score_mode == "none" or abs(command.delta) not in profile.score_steps):
+                raise ValueError("invalid_input")
+            if operation == "sets" and not profile.sets_enabled:
+                raise Conflict("Satzerfassung ist im Sportprofil deaktiviert.")
+            if operation == "sets" and not match.sets_won:
+                match.sets_won = {participant: 0 for participant in match.scores}
+            scores = match.sets_won if operation == "sets" else match.scores
+            if scores[pid] + command.delta < 0:
                 raise Conflict("Score darf nicht negativ werden.")
-            match.scores[pid] += command.delta
+            scores[pid] += command.delta
+            if operation == "score" and profile.score_mode == "period":
+                match.period_scores[str(match.period)] = dict(match.scores)
+                event['period'] = match.period
             event.update(participant_id=pid, delta=command.delta)
-        elif operation in ("pause", "resume"):
-            match.status = "paused" if operation == "pause" else "live"
         elif operation == "counter":
             if command.control_revision != match.control_revision or command.period != match.period:
                 raise Conflict("Spielzustand, Seiten oder Abschnitt wurden geändert. Bitte Anzeige prüfen.")
             profile = state.event.sport_profile
             definition = next((c for c in profile.counters if c.id == command.counter_id), None) if profile else None
-            if definition is None or command.participant_id not in match.scores:
+            if definition is None or not definition.enabled or command.participant_id not in match.scores:
                 raise Conflict("Unbekannter Counter oder Teilnehmer dieses Spiels.")
             value = counter_value(match, definition, command.participant_id) + command.delta
             if value < 0:
@@ -335,6 +379,9 @@ class Service:
                     value = 0 if definition.reset_each_period else counter_value(match, definition, pid)
                     match.counters[definition.id][pid][str(command.period)] = value
             match.period = command.period
+            if profile.score_mode == "period":
+                match.scores = {pid: 0 for pid in match.scores}
+                match.period_scores[str(match.period)] = dict(match.scores)
             match.intermission = False
             event.update(type="period_changed", period=match.period)
         elif operation == "intermission":
@@ -350,12 +397,18 @@ class Service:
             match.side_l, match.side_r = match.side_r, match.side_l
             event["type"] = "side_switch"
         elif operation == "undo":
-            last = next((e for e in state.score_events(match.id) if not e.undone), None)
+            last = next((e for e in state.point_events(match.id) if not e.undone), None)
             if last is None:
-                raise Conflict("Keine Score-Aktion zum Zurücknehmen vorhanden.")
-            match.scores[last.participant_id] -= last.delta
+                raise Conflict("Keine Punkte- oder Satzaktion zum Zurücknehmen vorhanden.")
+            if last.type == "sets":
+                match.sets_won[last.participant_id] -= last.delta
+            elif state.event.sport_profile and state.event.sport_profile.score_mode == "period":
+                match.period_scores[str(last.period)][last.participant_id] -= last.delta
+                match.scores = dict(match.period_scores[str(match.period)])
+            else:
+                match.scores[last.participant_id] -= last.delta
             last.undone = True
-            event.update(participant_id=last.participant_id, delta=-last.delta, undo_of=last.id)
+            event.update(participant_id=last.participant_id, delta=-last.delta, undo_of=last.id, period=last.period)
         elif operation == "finish":
             match.status = "finished"
             match.intermission = False
@@ -364,6 +417,6 @@ class Service:
             # Wiederöffnen erhält die Wettkampfdaten und benötigt keinen weiteren Resume-Schritt.
             match.status = "live"
             event["type"] = "match_reopened"
-        if operation not in ("score", "counter"):
+        if operation not in ("score", "counter", "sets"):
             match.control_revision += 1
         return event

@@ -106,7 +106,10 @@ class SectionsTest(unittest.TestCase):
                     self.assertEqual(exported['schema_version'], 1)
                     self.assertEqual(exported['matches'][0]['status'], 'live')
                 with TestClient(app()) as client:
-                    self.assertEqual(client.get('/api/v1/live').json(), expected)
+                    actual=client.get('/api/v1/live').json()
+                    self.assertNotEqual(actual['source']['instance_id'],expected['source']['instance_id'])
+                    expected['source']=actual['source']
+                    self.assertEqual(actual,expected)
 
     def test_legacy_pause_is_preserved_but_live_projection_is_consistent(self):
         with tempfile.TemporaryDirectory(dir=ROOT / '.test-artifacts') as directory:
@@ -130,5 +133,5 @@ class SectionsTest(unittest.TestCase):
                 self.assertEqual((live['left']['score'], live['right']['score']), (2, 1))
                 schema = client.get('/openapi.json').json()
                 for route in ('pause', 'resume'):
-                    self.assertTrue(schema['paths']['/api/v1/live/' + route]['post']['deprecated'])
+                    self.assertNotIn('/api/v1/live/'+route,schema['paths'])
             self.assertEqual(path.read_bytes(), original)

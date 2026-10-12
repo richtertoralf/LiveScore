@@ -38,7 +38,7 @@ class APITest(unittest.TestCase):
             request_id=str(uuid4()), catalog_session=self.state()['stream_id'],
             selection_token=self.state()['selection_token'], event_id=created)).raise_for_status()
         self.path = Path(self.directory.name) / 'events' / f'{created}.json'
-        self.configure('event', dict(name='Test', date_from='2026-10-03', date_to='2026-10-04'))
+        self.configure('event', dict(name='Test', date_from='2026-10-03', date_to='2026-10-04',sport_profile=dict(periods=2)))
         self.configure('play-areas', dict(id='area', label='Court 1'))
         for pid in ('a','b','c'):
             self.configure('participants', dict(id=pid, name=pid.upper()))
@@ -109,13 +109,13 @@ class APITest(unittest.TestCase):
         self.assertEqual((before['left']['score'],before['right']['score']),(2,1))
         self.action('switch-sides')
         after = self.client.get('/api/v1/live').json()
-        self.assertEqual(after['left'],dict(id='b',name='B',short_name='',country_code='',score=1,counters={},counter_states={}))
-        self.assertEqual(after['right'],dict(id='a',name='A',short_name='',country_code='',score=2,counters={},counter_states={}))
+        self.assertEqual(after['left'],dict(id='b',name='B',short_name='',country_code='',score=1,counters={},counter_states={},sets_won=None,period_scores=None,role=None))
+        self.assertEqual(after['right'],dict(id='a',name='A',short_name='',country_code='',score=2,counters={},counter_states={},sets_won=None,period_scores=None,role=None))
         # Bestehende Felder bleiben erhalten; stage, round und period_info kommen additiv hinzu.
         self.assertEqual(set(after),{'status','revision','match_id','play_area','left','right','officials','period',
-                                     'period_info','stage','round','sport_profile'})
+                                     'period_info','stage','round','sport_profile','display','pairing_confirmed','source'})
         self.assertEqual((after['stage'],after['round']),(None,None))
-        self.assertEqual(after['period_info'],dict(number=1,intermission=False,code='period_1',label_en='1. Period',labels=dict(de='1. Abschnitt',en='1. Period',cs='1. Část')))
+        self.assertEqual(after['period_info'],dict(number=1,total=2,intermission=False,code='period_1',label_en='Period 1',labels=dict(de='1. Abschnitt',en='Period 1',cs='1. Část'),period_labels=dict(de='1. Abschnitt',en='Period 1',cs='1. Část')))
         self.assertEqual(after['play_area'],{'id':'area','label':'Court 1'})
         self.assertEqual(self.state()['matches'][0]['scores'],{'a':2,'b':1})
         self.action('undo')
@@ -123,17 +123,17 @@ class APITest(unittest.TestCase):
 
     def test_decrement_undo_pause_resume_finish_next(self):
         self.start(); self.score(); self.score(); self.score(delta=-1)
-        self.action('pause')
+        self.action('intermission',intermission=True)
         self.assertEqual(self.state()['live']['status'],'live')
         self.action('undo')
         self.assertEqual(self.state()['live']['left']['score'],2)
-        self.action('resume'); self.action('finish')
+        self.action('intermission',intermission=False); self.action('finish')
         self.assertEqual(self.state()['live']['status'],'finished')
         state = self.action('select',match_id='m2')
         self.assertEqual(state['live']['status'],'scheduled')
         self.assertEqual(state['matches'][0]['scores']['a'],2)
         event_types = {e['type'] for e in self.client.get('/api/v1/events').json()}
-        self.assertTrue({'match_started','score','pause','resume','match_finished','undo'} <= event_types)
+        self.assertTrue({'match_started','score','intermission_started','intermission_ended','match_finished','undo'} <= event_types)
 
     def test_reopen_after_accidental_finish_keeps_scores_sides_and_undo(self):
         self.start(); self.score('L'); self.score('L'); self.score('R')
@@ -166,7 +166,7 @@ class APITest(unittest.TestCase):
         self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
         self.action('start')
         self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
-        self.action('pause')
+        self.action('intermission',intermission=True)
         self.assertEqual(self.request('live/reopen',match_id='m1').status_code,409)
         self.action('finish')
         stale = self.state()['revision']
@@ -212,7 +212,9 @@ class APITest(unittest.TestCase):
                     self.action('period', period=2)
                     self.action('intermission', intermission=True)
                     self.action('switch-sides')
-                if status == 'paused': self.action('pause')
+                if status == 'paused':
+                    imported=load(self.path);imported.matches[0].status='paused';save(self.path,imported)
+                    self.client.__exit__(None,None,None);self.client=TestClient(self.app).__enter__()
                 if status == 'finished': self.action('finish')
                 before = self.state()
                 events = self.client.get('/api/v1/events').json()
@@ -276,7 +278,7 @@ class APITest(unittest.TestCase):
         for bad in ('participant_id', 'match_id', 'delta'):
             broken = json.loads(json.dumps(raw))
             score = next(e for e in broken['events'] if e['type'] == 'score')
-            score[bad] = 2 if bad == 'delta' else 'missing'
+            score[bad] = 0 if bad == 'delta' else 'missing'
             with self.assertRaises(ValidationError): State.model_validate(broken)
         broken = json.loads(json.dumps(raw))
         next(e for e in broken['events'] if e['type'] == 'match_reset')['match_id'] = 'missing'
@@ -356,7 +358,7 @@ class APITest(unittest.TestCase):
         self.assertEqual(self.state()['live']['left']['score'],0)
 
     def test_invalid_transitions_do_not_mutate(self):
-        for operation in ('start','pause','resume','finish','undo','switch-sides'):
+        for operation in ('start','finish','undo','switch-sides'):
             before = self.state()
             response = self.request('live/'+operation,match_id='m1')
             self.assertEqual(response.status_code,409)
@@ -367,10 +369,10 @@ class APITest(unittest.TestCase):
         self.action('switch-sides'); self.action('start')
         self.assertEqual(self.request('live/start',match_id='m1').status_code,409)
         self.assertEqual(self.request('live/select',match_id='m2').status_code,409)
-        self.action('pause')
-        self.assertEqual(self.request('live/pause',match_id='m1').status_code,409)
+        self.action('intermission',intermission=True)
+        self.assertEqual(self.request('live/intermission',match_id='m1',intermission=True).status_code,409)
         self.action('finish')
-        for operation in ('undo','switch-sides','resume','prepare','start','finish'):
+        for operation in ('undo','switch-sides','prepare','start','finish'):
             self.assertEqual(self.request('live/'+operation,match_id='m1').status_code,422 if operation == 'prepare' else 409)
         self.assertEqual(self.client.post('/api/v1/live/score',json=self.score_payload()).status_code,409)
 
@@ -396,7 +398,7 @@ class APITest(unittest.TestCase):
         self.action('switch-sides')
         self.assertEqual(self.client.post('/api/v1/live/score',json=stale).status_code,409)
         stale = self.score_payload()
-        self.action('pause'); self.action('resume')
+        self.action('intermission',intermission=True); self.action('intermission',intermission=False)
         self.assertEqual(self.client.post('/api/v1/live/score',json=stale).status_code,409)
         self.action('finish'); self.action('select',match_id='m2')
         self.assertEqual(self.client.post('/api/v1/live/score',json=stale).status_code,409)
@@ -433,11 +435,11 @@ class APITest(unittest.TestCase):
     def test_restart_restores_undo_and_request_deduplication(self):
         self.start(); payload = self.score_payload()
         self.client.post('/api/v1/live/score',json=payload)
-        self.action('switch-sides'); self.action('pause')
+        self.action('switch-sides'); self.action('intermission',intermission=True)
         previous = self.state()
         self.client.__exit__(None,None,None)
         self.app = create_app(auth_config=AuthConfig(enabled=False), data_file=self.legacy_path); self.client = TestClient(self.app).__enter__()
-        comparable = lambda state: {k:v for k,v in state.items() if k not in ('stream_id','stream_revision')}
+        comparable = lambda state: {k: ({field:value for field,value in v.items() if field!='source'} if k=='live' else v) for k,v in state.items() if k not in ('stream_id','stream_revision')}
         self.assertEqual(comparable(self.state()),comparable(previous))
         self.assertEqual(comparable(self.client.post('/api/v1/live/score',json=payload).json()),comparable(previous))
         self.action('undo')
@@ -460,7 +462,7 @@ class APITest(unittest.TestCase):
             updated = self.score()
             self.assertEqual(a.receive_json(),updated)
             self.assertEqual(b.receive_json(),updated)
-        self.action('pause')
+        self.action('intermission',intermission=True)
         with self.client.websocket_connect('/api/v1/ws') as c:
             self.assertEqual(c.receive_json(),self.state())
 
@@ -541,7 +543,9 @@ class StorageTest(unittest.TestCase):
             for side,pid in [('L','bsc-praha'),('L','bsc-praha'),('R','fc-ingolstadt-04')]:
                 response = client.post('/api/v1/live/score',json={**score,'request_id':str(uuid4()),'side':side,'participant_id':pid,'event_id':state['active_event_id'],'selection_token':state['selection_token']})
                 self.assertEqual(response.status_code,200,response.text)
-            self.assertEqual(client.get('/api/v1/live').json(),expected)
+            actual=client.get('/api/v1/live').json()
+            expected['source']=actual['source']
+            self.assertEqual(actual,expected)
 
 
 class QueueTest(unittest.IsolatedAsyncioTestCase):

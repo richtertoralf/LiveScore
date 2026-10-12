@@ -62,13 +62,14 @@ class DeploymentTest(unittest.TestCase):
     def test_fresh_seed_wrapper_and_server(self):
         config = self.install()
         self.assertEqual((self.deployment.current / 'LICENSE').read_bytes(), (ROOT / 'LICENSE').read_bytes())
+        self.assertEqual(len(ProfileLibrary.model_validate_json((config.data_dir/'sport-profiles.json').read_bytes()).profiles),7)
         expected = load(ROOT / 'imports/prague-2026.json')
         self.assertEqual(load(config.data_dir / 'events/prague-2026.json'), expected)
         self.assertEqual((len(expected.matches), len(expected.participants), len(expected.referees)), (14,6,6))
         result = subprocess.run([self.deployment.cli,'--version'], capture_output=True,text=True,check=True)
-        self.assertEqual(result.stdout, 'LiveScore 0.2.1\n')
+        self.assertEqual(result.stdout, 'LiveScore 0.2.2\n')
         with TestClient(create_app(data_dir=config.data_dir,auth_config=config.auth)) as client:
-            self.assertEqual(client.get('/api/version').json(), {'version':'0.2.1'})
+            self.assertEqual(client.get('/api/version').json(), {'version':'0.2.2'})
             self.assertEqual(client.get('/api/v1/live').status_code,200)
             catalog = client.app.state.service
             self.assertEqual(catalog.selection.active_event_id,'prague-2026')
@@ -97,18 +98,31 @@ class DeploymentTest(unittest.TestCase):
         before = self.snapshot()
         old = self.deployment.current.resolve()
         # Exercise the actual version transition used by the installed CLI.
-        (old / 'VERSION').write_text('0.2.0\n')
+        (old / 'VERSION').write_text('0.2.1\n')
         with self.deployment.lock():
             self.deployment.deploy(ROOT,upgrade=True)
         self.assertNotEqual(self.deployment.current.resolve(),old)
         self.assertTrue(old.exists())
-        self.assertEqual(self.snapshot(),before)
-        self.assertEqual((self.deployment.current / 'VERSION').read_text(),'0.2.1\n')
+        after=self.snapshot()
+        key=str((config.data_dir/'sport-profiles.json').relative_to(self.root))
+        self.assertEqual({k:v for k,v in after.items() if k!=key},{k:v for k,v in before.items() if k!=key})
+        library=ProfileLibrary.model_validate_json(after[key])
+        self.assertEqual(len(library.profiles),8)
+        self.assertEqual(library.profiles[0].id,'prague')
+        self.assertEqual(library.profiles[0].profile,state.event.sport_profile)
+        # A second upgrade preserves customized defaults, deleted defaults and new profiles exactly.
+        library.profiles[1].profile.translations['de'].name='Eigene Bezeichnung'
+        library.profiles.pop(2)
+        save_library(config.data_dir/'sport-profiles.json',library)
+        repeated=self.snapshot()
+        with self.deployment.lock():self.deployment.deploy(ROOT,upgrade=True)
+        self.assertEqual(self.snapshot(),repeated)
+        self.assertEqual((self.deployment.current / 'VERSION').read_text(),'0.2.2\n')
         auth = Auth(config.auth)
         self.assertTrue(verify_password(password,auth.credentials.users['admin'].password_hash))
         self.assertFalse(verify_password('admin',auth.credentials.users['admin'].password_hash))
         self.assertEqual(json.loads(selection.read_text())['active_event_id'],'other')
-        self.assertEqual(len(list((self.deployment.state / 'backups').iterdir())),1)
+        self.assertEqual(len(list((self.deployment.state / 'backups').iterdir())),2)
 
     def test_reinstall_refuses_and_uninstall_retains_then_reinstall_preserves(self):
         config = self.install()
@@ -128,6 +142,7 @@ class DeploymentTest(unittest.TestCase):
 
     def test_failure_after_swap_restores_code_unit_and_data(self):
         config=self.install(); Auth(config.auth)
+        save_library(config.data_dir/'sport-profiles.json',ProfileLibrary())
         before=self.snapshot(); old=self.deployment.current.resolve()
         unit=self.deployment.unit.read_bytes()
         with patch.object(self.deployment,'health',side_effect=RuntimeError('simulated start failure')):

@@ -103,7 +103,7 @@ class LiveMetadataTest(unittest.TestCase):
         self.assertEqual(live['status'], 'scheduled')
         self.assertEqual(live['stage'], dict(code='group_stage', name='Gruppenphase', label_en='Group stage'))
         self.assertEqual(live['round'], dict(code='group_a', name='Gruppe A', label_en='Group A'))
-        self.assertEqual(live['period_info'], dict(number=1, intermission=False, code='not_started', label_en='1. Half', labels=dict(de='1. Halbzeit',en='1. Half',cs='1. Poločas')))
+        self.assertEqual(live['period_info'], dict(number=1, total=2, intermission=False, code='not_started', label_en='Half 1', labels=dict(de='1. Halbzeit',en='Half 1',cs='1. Poločas'),period_labels=dict(de='1. Halbzeit',en='Half 1',cs='1. Poločas')))
         self.assertEqual(live['officials'], [
             dict(id='luis-ramon-perez-macias', name='Luis Ramon Pérez Macias', country_code='ES', position=1, role='referee', role_label_en='Referee'),
             dict(id='bennet-kruekemeier', name='Bennet Krükemeier', country_code='DE', position=2, role='referee', role_label_en='Referee'),
@@ -192,34 +192,32 @@ class LiveMetadataTest(unittest.TestCase):
     def test_first_half_pause_half_time_second_half_full_time(self):
         self.action('select'); self.action('prepare', participant_1='bsc-praha', participant_2='fc-ingolstadt-04',
                                             side_l='bsc-praha', side_r='fc-ingolstadt-04')
-        self.assertEqual(self.phase(), ('not_started', '1. Half', 1, False))
+        self.assertEqual(self.phase(), ('not_started', 'Half 1', 1, False))
         self.action('intermission', status=409, intermission=True)
         self.action('start')
-        self.assertEqual(self.phase(), ('period_1', '1. Half', 1, False))
-        self.action('pause')
+        self.assertEqual(self.phase(), ('period_1', 'Half 1', 1, False))
         self.assertEqual(self.live()['status'], 'live')
-        self.assertEqual(self.phase(), ('period_1', '1. Half', 1, False))  # normale Pause ≠ Halbzeit
-        self.action('resume')
+        self.assertEqual(self.phase(), ('period_1', 'Half 1', 1, False))
         self.action('intermission', intermission=True)
         self.assertEqual((self.live()['status'], *self.phase()), ('live', 'intermission_after_1', 'Half-time', 1, True))
         self.action('intermission', status=409, intermission=True)
         self.action('intermission', intermission=False)  # Korrektur
-        self.assertEqual(self.phase(), ('period_1', '1. Half', 1, False))
-        self.action('intermission', intermission=True); self.action('pause')
+        self.assertEqual(self.phase(), ('period_1', 'Half 1', 1, False))
+        self.action('intermission', intermission=True)
         self.assertEqual((self.live()['status'], *self.phase()), ('live', 'intermission_after_1', 'Half-time', 1, True))
         self.foul('bsc-praha')  # zählt weiter zur ersten Halbzeit
         self.action('period', period=2)
-        self.assertEqual((self.live()['status'], *self.phase()), ('live', 'period_2', '2. Half', 2, False))
+        self.assertEqual((self.live()['status'], *self.phase()), ('live', 'period_2', 'Half 2', 2, False))
         self.assertEqual(self.state()['matches'][0]['counters']['team_fouls']['bsc-praha'], {'1': 1, '2': 0})
         self.action('intermission', status=409, intermission=True)  # kein Abschnitt mehr danach
-        self.action('resume'); self.action('finish')
-        self.assertEqual(self.phase(), ('finished', '2. Half', 2, False))
+        self.action('finish')
+        self.assertEqual(self.phase(), ('finished', 'Half 2', 2, False))
         types = [e['type'] for e in self.client.get('/api/v1/events').json()]
         self.assertEqual(types.count('intermission_started'), 2)
         self.assertEqual(types.count('intermission_ended'), 1)
         # Nächstes Spiel beginnt neu, ohne Periode/Pause des vorherigen.
         self.action('select', match_id='match-002')
-        self.assertEqual(self.phase(), ('not_started', '1. Half', 1, False))
+        self.assertEqual(self.phase(), ('not_started', 'Half 1', 1, False))
 
     def test_finish_during_half_time_and_validation(self):
         self.start()
@@ -227,7 +225,7 @@ class LiveMetadataTest(unittest.TestCase):
         self.action('intermission', status=422, intermission='yes')
         self.action('intermission', status=422)
         self.action('finish')
-        self.assertEqual(self.phase(), ('finished', '1. Half', 1, False))
+        self.assertEqual(self.phase(), ('finished', 'Half 1', 1, False))
         self.action('intermission', status=409, intermission=False)
 
         def variant(status, period=1, intermission=False):
@@ -266,7 +264,10 @@ class LiveMetadataTest(unittest.TestCase):
         self.action('intermission', intermission=True)
         expected = self.live()
         self.restart()
-        self.assertEqual(self.live(), expected)
+        actual=self.live()
+        self.assertNotEqual(actual['source']['instance_id'],expected['source']['instance_id'])
+        expected['source']=actual['source']
+        self.assertEqual(actual, expected)
         stored = load(self.path).matches[0]
         self.assertEqual((stored.intermission, stored.stage, stored.round), (True, 'Gruppenphase', 'Gruppe A'))
         self.assertEqual(expected['right']['counters'], {'team_fouls': 1})
@@ -277,13 +278,13 @@ class LiveMetadataTest(unittest.TestCase):
         event['sport_profile'].update(sport='showdown', period_label='Satz', periods=3)
         self.request('config/event', data=event)
         self.start()
-        self.assertEqual(self.phase(), ('period_1', '1. Set', 1, False))
+        self.assertEqual(self.phase(), ('period_1', 'Set 1', 1, False))
         self.action('intermission', intermission=True)
         self.assertEqual(self.phase(), ('intermission_after_1', 'Set break', 1, True))
         self.action('period', period=2)
-        self.assertEqual(self.phase(), ('period_2', '2. Set', 2, False))
+        self.assertEqual(self.phase(), ('period_2', 'Set 2', 2, False))
         self.action('finish')
-        self.assertEqual(self.phase(), ('finished', '2. Set', 2, False))
+        self.assertEqual(self.phase(), ('finished', 'Set 2', 2, False))
 
     def test_without_profile_no_intermission_and_no_counters(self):
         data = json.loads(self.path.read_text())
@@ -294,7 +295,7 @@ class LiveMetadataTest(unittest.TestCase):
         self.restart()
         self.start()
         live = self.live()
-        self.assertEqual(live['period_info'], dict(number=1, intermission=False, code='period_1', label_en='1. Period', labels=dict(de='1. Abschnitt',en='1. Period',cs='1. Část')))
+        self.assertEqual(live['period_info'], dict(number=1,total=1,intermission=False,code='period_1',label_en='Period 1',labels=dict(de='1. Abschnitt',en='Period 1',cs='1. Část'),period_labels=dict(de='1. Abschnitt',en='Period 1',cs='1. Část')))
         self.assertEqual((live['left']['counters'], live['left']['counter_states']), ({}, {}))  # nicht unterstützt
         self.action('intermission', status=409, intermission=True)
 
@@ -325,7 +326,7 @@ class LegacyDataTest(LiveMetadataTest):
         self.action('prepare', participant_1='bsc-praha', participant_2='fc-ingolstadt-04',
                     side_l='bsc-praha', side_r='fc-ingolstadt-04')
         self.action('start')
-        self.assertEqual(self.phase(), ('period_1', '1. Half', 1, False))
+        self.assertEqual(self.phase(), ('period_1', 'Half 1', 1, False))
         self.assertNotIn('intermission', json.loads(json.dumps(PRAGUE['matches'][0])))
         self.assert_compatible(self.live())
 

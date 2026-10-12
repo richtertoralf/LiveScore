@@ -73,7 +73,7 @@ export class Connection {
     const catalog = path.startsWith('event-catalog/');
     const profile = path.startsWith('sport-profiles/');
     const payload = {request_id: uuid(), ...(catalog || profile ? {catalog_session:this.state.stream_id} : context), ...fields};
-    if (!catalog && !path.endsWith('/score') && !path.endsWith('/counter')) payload.expected_revision = revision;
+    if (!catalog && !path.endsWith('/score') && !path.endsWith('/counter') && !path.endsWith('/sets')) payload.expected_revision = revision;
     try {
       let response;
       // Retry only transport errors, using the exact same persisted request ID.

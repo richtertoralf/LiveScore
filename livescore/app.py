@@ -16,7 +16,7 @@ from .config import ROOT
 from .catalog import Catalog, CreateEvent, SelectEvent, ImportPreview, ImportEvent, ReplaceEvent, ResetEvent, ProfileCommand, SaveProfile
 from .models import Count, ID, Model, SportProfile
 from .profiles import display_profile
-from .service import Conflict, live_view
+from .service import Conflict
 from .storage import FileLease
 from .auth import Auth, AuthConfig, COOKIE
 from .auth_web import install_auth, same_origin
@@ -50,6 +50,10 @@ class Score(EventContext):
     control_revision: Count
     participant_id: ID
     side: Literal["L", "R"]
+    delta: int = Field(strict=True)
+
+
+class Sets(Score):
     delta: int = Field(strict=True, ge=-1, le=1)
 
 
@@ -133,7 +137,7 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
 
     @app.get("/api/v1/live")
     async def live():
-        return live_view(app.state.service.state)
+        return app.state.service.live()
 
     @app.get("/api/version")
     async def version():
@@ -225,14 +229,19 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     @app.post("/api/v1/live/score")
     async def score(command: Score):
         if command.delta == 0:
-            return JSONResponse({"detail": "delta muss -1 oder 1 sein."}, status_code=422)
+            return JSONResponse({"detail": "invalid_input"}, status_code=422)
         return await app.state.service.apply("score", command)
+
+    @app.post("/api/v1/live/sets")
+    async def sets(command: Sets):
+        if command.delta == 0:
+            return JSONResponse({"detail": "invalid_input"}, status_code=422)
+        return await app.state.service.apply("sets", command)
 
     def add_action(operation):
         async def action(command: MatchCommand):
             return await app.state.service.apply(operation, command)
-        app.add_api_route("/api/v1/live/" + operation, action, methods=["POST"], name=operation,
-                          deprecated=operation in ("pause", "resume"))
+        app.add_api_route("/api/v1/live/" + operation, action, methods=["POST"], name=operation)
 
     @app.post("/api/v1/live/counter")
     async def counter(command: Counter):
@@ -248,7 +257,7 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     async def intermission(command: Intermission):
         return await app.state.service.apply("intermission", command)
 
-    for operation in ("select", "unprepare", "start", "pause", "resume", "switch-sides", "undo", "finish", "reopen", "reset"):
+    for operation in ("select", "unprepare", "start", "switch-sides", "undo", "finish", "reopen", "reset"):
         add_action(operation)
 
     @app.websocket("/api/v1/ws")

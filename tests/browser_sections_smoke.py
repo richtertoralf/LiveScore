@@ -79,6 +79,11 @@ async def run(executable, language_filter=None):
                                 counters=[dict(id='count', label='Counter', reset_each_period=True)]) if label else None
                             for match in data['matches']:
                                 match['counters'] = {}
+                            if sport=='boxing':
+                                # Portable legacy fixture; old pause endpoints no longer exist.
+                                match=data['matches'][0];data['active_match_id']=match['id']
+                                match.update(status='paused',side_l=match['participant_1'],side_r=match['participant_2'],
+                                             scores={match['participant_1']:0,match['participant_2']:0})
                             text = json.dumps(data)
                             event_id = f'sections-{language}-{index}'
 
@@ -102,25 +107,22 @@ async def run(executable, language_filter=None):
                             async def live():
                                 return await (await a.request.get(url + '/api/v1/live')).json()
 
-                            await a.locator('[data-action=select]').first.click()
-                            await click(a, 'prepare')
                             word, pause = vocabulary[language][term]
                             def start_label(number):
                                 return f'{number}. {word} starten' if language == 'de' else f'Zahájit {number}. {word}' if language == 'cs' else f'Start {word} {number}'
-                            if label:
-                                await expect(a.locator('[data-action=start]')).to_have_text(start_label(1))
-                                # A custom label must not accidentally become another UI translation.
-                                assert await a.evaluate("async () => (await import('/static/i18n.js')).profileText({translations:{en:{period_label:'Name'},de:{period_label:'Name'},cs:{period_label:'Name'}}},'period_label')") == 'Name'
-                            await click(a, 'start')
+                            if sport!='boxing':
+                                await a.locator('[data-action=select]').first.click()
+                                await click(a, 'prepare')
+                                if label:
+                                    await expect(a.locator('[data-action=start]')).to_have_text(start_label(1))
+                                    # Custom labels must not become another UI translation.
+                                    assert await a.evaluate("async () => (await import('/static/i18n.js')).profileText({translations:{en:{period_label:'Name'},de:{period_label:'Name'},cs:{period_label:'Name'}}},'period_label')") == 'Name'
+                                await click(a, 'start')
+                            else:
+                                state=await (await a.request.get(url+'/api/v1/tournament')).json()
+                                assert state['matches'][0]['status']=='paused' and state['live']['status']=='live'
+                                await a.reload();await b.reload()
                             await expect(b.locator('.status')).to_have_text('LIVE' if language != 'cs' else 'ŽIVĚ')
-                            if sport == 'boxing':
-                                # An old client can still create paused; new GUI/API agree on live.
-                                state = await (await a.request.get(url + '/api/v1/tournament')).json()
-                                legacy = await post('live/pause', request_id=str(uuid4()), match_id='match-001',
-                                    event_id=event_id, selection_token=state['selection_token'], expected_revision=state['revision'])
-                                assert legacy['matches'][0]['status'] == 'paused' and legacy['live']['status'] == 'live'
-                                await a.reload(); await b.reload()
-                                await expect(b.locator('.status')).to_have_text('LIVE' if language != 'cs' else 'ŽIVĚ')
                             for page in (a, b):
                                 await expect(page.locator('[data-action=pause], [data-action=resume]')).to_have_count(0)
                             for period in range(1, count + 1):
@@ -145,7 +147,7 @@ async def run(executable, language_filter=None):
                                     if sport in ('boxing', 'showdown') and period == 1:
                                         await a.screenshot(path=str(ARTIFACTS / f'sections-{sport}-{language}.png'), full_page=True)
                                     await click(b, 'period-dialog'); await b.locator('#period-confirm').click()
-                                    await expect(a.locator('#period-label')).to_contain_text(f'{period + 1}. {word}')
+                                    await expect(a.locator('#period-label')).to_contain_text(f'{word} {period + 1}' if language=='en' else f'{period + 1}. {word}')
                                     assert (await live())['period_info']['intermission'] is False
                                 else:
                                     await expect(a.locator('[data-action=intermission]')).to_have_count(0)

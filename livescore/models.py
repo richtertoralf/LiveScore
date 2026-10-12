@@ -22,6 +22,8 @@ class ProfileLabels(Model):
     period_label: str = Field(default="", max_length=200)
     break_label: str = Field(default="", max_length=200)
     hint: str = Field(default="", max_length=500)
+    score_label: str = Field(default="", max_length=200)
+    sets_label: str = Field(default="", max_length=200)
 
 
 class CounterLabels(Model):
@@ -35,6 +37,7 @@ class CounterDefinition(Model):
     label: Text
     scope: Literal["participant"] = "participant"
     reset_each_period: bool = Field(default=True, strict=True)
+    enabled: bool = Field(default=True, strict=True)
     warning_at: Count | None = None
     critical_at: Count | None = None
     warning_label: str = Field(default="", max_length=200)
@@ -48,6 +51,17 @@ class CounterDefinition(Model):
         return self
 
 
+class ProfileRole(Model):
+    id: ID
+    labels: dict[Language, Text]
+
+    @model_validator(mode="after")
+    def languages(self):
+        if set(self.labels) != {'de', 'en', 'cs'}:
+            raise ValueError('Teilnehmerrollen benötigen Bezeichnungen in DE, EN und CS.')
+        return self
+
+
 class SportProfile(Model):
     # Optional descriptive metadata; never selects program logic.
     sport: Text = "generic"
@@ -56,11 +70,23 @@ class SportProfile(Model):
     period_label: Text = "Abschnitt"
     counters: list[CounterDefinition] = Field(default_factory=list)
     translations: dict[Language, ProfileLabels] = Field(default_factory=dict)
+    score_mode: Literal["total", "period", "none"] = "total"
+    score_steps: list[Annotated[int, Field(strict=True, ge=1)]] = Field(default_factory=lambda: [1], min_length=1, max_length=8)
+    sets_enabled: bool = Field(default=False, strict=True)
+    # Fixed roles belong to the planned pair, never to the current screen side.
+    roles: dict[Literal["participant_1", "participant_2"], ProfileRole] = Field(default_factory=dict)
+    show_details: bool = Field(default=True, strict=True)
+    show_officials: bool = Field(default=True, strict=True)
 
     @model_validator(mode="after")
     def unique_counters(self):
         if len({c.id for c in self.counters}) != len(self.counters):
             raise ValueError("Counter-IDs müssen eindeutig sein.")
+        if len(set(self.score_steps)) != len(self.score_steps):
+            raise ValueError("Punkteschritte müssen eindeutig sein.")
+        if self.roles and (set(self.roles) != {"participant_1", "participant_2"}
+                           or len({role.id for role in self.roles.values()}) != 2):
+            raise ValueError("Beide Teilnehmerrollen benötigen Bezeichnungen in DE, EN und CS.")
         return self
 
 
@@ -134,6 +160,8 @@ class Match(MatchPlan):
     # Pause zwischen `period` und dem nächsten Abschnitt (z. B. Halbzeitpause), unabhängig von paused.
     intermission: bool = Field(default=False, strict=True)
     counters: dict[ID, dict[ID, dict[str, Count]]] = Field(default_factory=dict)
+    period_scores: dict[str, dict[ID, Count]] = Field(default_factory=dict)
+    sets_won: dict[ID, Count] = Field(default_factory=dict)
 
 
 class ActionEvent(Model):
@@ -145,7 +173,7 @@ class ActionEvent(Model):
     signature: str
     match_id: ID | None = None
     participant_id: ID | None = None
-    delta: int | None = None
+    delta: int | None = Field(default=None, strict=True)
     undone: bool = False
     undo_of: str | None = None
     counter_id: ID | None = None
@@ -163,14 +191,14 @@ class State(Model):
     active_match_id: ID | None = None
     events: list[ActionEvent] = Field(default_factory=list)
 
-    def score_events(self, match_id):
-        """Score-Aktionen des aktuellen Spielversuchs, neueste zuerst."""
+    def point_events(self, match_id):
+        """Punkte- und Satzaktionen des aktuellen Spielversuchs, neueste zuerst."""
         for event in reversed(self.events):
             if event.match_id != match_id:
                 continue
             if event.type == "match_reset":
                 break
-            if event.type == "score":
+            if event.type in ("score", "sets"):
                 yield event
 
     @model_validator(mode="after")
@@ -222,6 +250,25 @@ class State(Model):
                 raise ValueError("Seiten und Scores müssen zur Paarung gehören.")
             if match.status == "ready" and any(match.scores.values()):
                 raise ValueError("Vor Spielbeginn müssen Scores null sein.")
+            mode = profile.score_mode if profile else "total"
+            if mode == "none" and any(match.scores.values()):
+                raise ValueError("Ohne Punkteerfassung müssen Scores null sein.")
+            if mode != "period" and match.period_scores:
+                raise ValueError("Abschnittspunkte benötigen abschnittsbezogene Punkteerfassung.")
+            for period, scores in match.period_scores.items():
+                if (not period.isascii() or not period.isdigit() or str(int(period)) != period
+                        or not 1 <= int(period) <= match.period or set(scores) != set(pair)):
+                    raise ValueError("Ungültiger Abschnitt oder Teilnehmer in Abschnittspunkten.")
+                if match.status in ("scheduled", "ready") and any(scores.values()):
+                    raise ValueError("Abschnittspunkte müssen vor Spielbeginn null sein.")
+            if mode == "period" and match.status != "scheduled":
+                if match.period_scores.get(str(match.period)) != match.scores:
+                    raise ValueError("Aktuelle Abschnittspunkte müssen zum Score passen.")
+            if (match.sets_won and (not profile or not profile.sets_enabled
+                                    or set(match.sets_won) != set(pair))):
+                raise ValueError("Satzstand benötigt aktivierte Satzerfassung und die aktuelle Paarung.")
+            if match.status in ("scheduled", "ready") and any(match.sets_won.values()):
+                raise ValueError("Satzstand muss vor Spielbeginn null sein.")
             if match.status in ("ready", "live", "paused") and match.id != self.active_match_id:
                 raise ValueError("Nur das ausgewählte Spiel darf aktiv sein.")
         if self.active_match_id is not None and self.active_match_id not in {m.id for m in self.matches}:
@@ -230,23 +277,30 @@ class State(Model):
         if len({e.id for e in self.events}) != len(self.events) or len({e.request_id for e in self.events}) != len(self.events):
             raise ValueError("Ereignis- und Request-IDs müssen eindeutig sein.")
         undo_scores = {m.id: dict(m.scores) for m in self.matches}
+        undo_periods = {m.id: {p: dict(s) for p, s in m.period_scores.items()} for m in self.matches}
+        undo_sets = {m.id: dict(m.sets_won) for m in self.matches}
         reset_matches = set()
         for event in reversed(self.events):
             if event.type == "match_reset":
                 if event.match_id not in undo_scores:
                     raise ValueError("Reset-Ereignis benötigt ein gültiges Spiel.")
                 reset_matches.add(event.match_id)
-            if event.type != "score":
+            if event.type not in ("score", "sets"):
                 continue
             if (event.match_id not in undo_scores or event.participant_id not in people
-                    or event.delta not in (-1, 1)):
-                raise ValueError("Score-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ±1.")
+                    or event.delta is None or event.delta == 0
+                    or (event.type == "sets" and abs(event.delta) != 1)):
+                raise ValueError("Punkte-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ungleich null.")
             # Previous attempts remain auditable, but no longer describe current scores/pairing.
             if event.match_id in reset_matches:
                 continue
-            scores = undo_scores.get(event.match_id, {})
-            if event.participant_id not in scores or event.delta not in (-1, 1):
-                raise ValueError("Score-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ±1.")
+            if event.type == "score" and profile and profile.score_mode == "none":
+                raise ValueError("Punkte-Ereignisse benötigen aktivierte Punkteerfassung.")
+            scores = undo_sets[event.match_id] if event.type == "sets" else (
+                undo_periods[event.match_id].get(str(event.period), {}) if profile and profile.score_mode == "period"
+                else undo_scores[event.match_id])
+            if event.participant_id not in scores:
+                raise ValueError("Punkte-Ereignis gehört nicht zum aktuellen Spielversuch.")
             if not event.undone:
                 scores[event.participant_id] -= event.delta
                 if scores[event.participant_id] < 0:

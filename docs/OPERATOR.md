@@ -42,39 +42,14 @@ zurückgenommen werden; nach dem Start muss das Ergebnis bestätigt werden.
 
 ## Sportprofile verwalten (Admin)
 
-Unter **Konfiguration → Sportprofile** stehen das Profil der aktiven Veranstaltung,
-alle Bibliotheksprofile und Profile aus anderen gespeicherten Veranstaltungen zur Auswahl.
-Die Bibliothek kann auch ohne aktive Veranstaltung gepflegt werden.
+Unter **Konfiguration → Sportprofile** ein Standardprofil auswählen und **Für
+Veranstaltung übernehmen**. Die Veranstaltung speichert eine Kopie; Änderungen an
+Bibliotheksprofilen verändern sie nicht. Profile können unabhängig von Veranstaltungen
+angelegt und gepflegt werden, alle Sprachtexte gemeinsam für DE/EN/CS.
 
-1. Ein Profil auswählen oder **Neues Profil** wählen.
-2. Abschnittsanzahl sowie Profilname, Abschnitts- und Pausenbezeichnung eintragen.
-   **DE, EN und CS sind gemeinsam sichtbar**, unabhängig von der Oberflächensprache.
-   Ein optionaler Hinweis erscheint in der Bedienung.
-3. Bei Bedarf **Zähler hinzufügen**: Namen und Warntexte in allen drei Sprachen,
-   optionale Warn- und kritische Schwelle sowie das Verhalten beim nächsten Abschnitt festlegen.
-   Die Schwellen heben Werte hervor; sie begrenzen keinen Wert und lösen keine Regel aus.
-4. **In Bibliothek speichern** beziehungsweise **Bibliotheksprofil speichern** sichert
-   die Vorlage. **Als neues Profil bearbeiten** erstellt daraus eine weitere Vorlage.
-5. **Für Veranstaltung übernehmen** speichert die angezeigten Einstellungen als
-   eigenständige Kopie in der aktiven Veranstaltung. Das verändert die Bibliothek nicht.
-
-Bibliotheksänderungen und **Aus Bibliothek löschen** verändern keine Veranstaltungskopie.
-Ein Veranstaltungsexport enthält das komplette Profil mit allen Sprachen und benötigt
-beim Import keine Bibliothek. **Ohne Sportprofil** entfernt die zusätzliche Erfassung,
-sofern die Veranstaltung noch keine dafür relevante Struktur verwendet.
-
-Vor der ersten Spielvorbereitung sind alle Felder frei bearbeitbar. Eine Vorbereitung
-kann dafür zurückgenommen werden. Sobald ein Wettkampf begonnen hat, bleiben Abschnittsanzahl,
-Zähler-IDs und Rücksetzverhalten fest: dieselbe Definition wird für vorhandene Ergebnisse
-und deren Historien verwendet. Bezeichnungen, Hinweise und Anzeigegrenzen
-bleiben bearbeitbar; neue Anzeigegrenzen gelten auch für bereits erfasste Werte.
-Die Bibliotheksvorlage lässt sich jederzeit vollständig ändern. Für eine andere
-Wettkampfstruktur eine neue Veranstaltung verwenden. Sind ausdrücklich alle Spiele
-zurückgesetzt und wieder geplant, ist die Struktur erneut bearbeitbar; frühere
-Ereignisse bleiben ausschließlich als Protokoll alter Spielversuche erhalten.
-
-Ein offenes Formular wird bei Änderungen durch andere Admins nicht still überschrieben.
-Nach einem Speicherkonflikt **Gespeicherten Stand laden**, prüfen und erneut bearbeiten.
+Erfassungsmodi, Standardprofile, Rollen und Änderungsregeln stehen in der
+[Profilanleitung](SPORT_PROFILES.md). Nach einem Speicherkonflikt **Gespeicherten Stand
+laden**, prüfen und erneut bearbeiten.
 
 ## Spiel bedienen
 
@@ -82,9 +57,9 @@ Nach einem Speicherkonflikt **Gespeicherten Stand laden**, prüfen und erneut be
 2. **Paarung bestätigen** oder **Paarung ändern**. Zwei verschiedene bekannte
    Teilnehmer sind erforderlich. L/R prüfen und bei Bedarf **Seiten tauschen**.
 3. Den Wettkampf starten: je nach Profil etwa **1. Halbzeit starten**, **1. Runde starten**
-   oder **1. Satz starten**, ohne Profil **Spiel starten**. Score mit **+1 / −1** erfassen.
+   oder **1. Satz starten**, ohne Profil **Spiel starten**. Die vom Profil vorgesehenen Punkte und Satzgewinne manuell erfassen.
    Negative Scores sind nicht möglich.
-4. **UNDO** nimmt die letzte noch nicht zurückgenommene Score-Aktion dieses Spiels
+4. **UNDO** nimmt die letzte noch nicht zurückgenommene Punkte- oder Satzaktion dieses Spiels
    zurück, auch die eines anderen Bedieners. Das funktioniert nach Seitenwechsel,
    Reload und Serverneustart. Zähleränderungen werden nicht mit Undo zurückgenommen.
 5. Bei Bedarf eine **Abschnittspause** setzen oder **Seitenwechsel** nutzen.
@@ -95,12 +70,12 @@ Nach einem Speicherkonflikt **Gespeicherten Stand laden**, prüfen und erneut be
 7. Nächstes Spiel auswählen. Ergebnisse bleiben im Spielplan erhalten.
 
 **L/R bezeichnet links/rechts im Programmbild oder Overlay.** Ein Seitenwechsel
-vertauscht die Darstellung; Namen, Scores, Länder und Zähler bleiben beim Teilnehmer.
+vertauscht die Darstellung; Namen, Scores, Satzgewinne, Länder, Rollen und Zähler bleiben beim Teilnehmer.
 
 Wurde ein Spiel versehentlich beendet, lässt es sich mit **Spiel wieder öffnen**
 nach Bestätigung fortsetzen. Frühere Spiele sind über **Beendete Spiele anzeigen**
 erneut auswählbar, sofern kein anderes Spiel vorbereitet oder aktiv ist.
-Score, Seiten, Abschnitt und Zähler bleiben erhalten; der Wettkampf ist sofort
+Punkte einschließlich Abschnittshistorie, Satzstand, Seiten, Abschnitt und Zähler bleiben erhalten; der Wettkampf ist sofort
 wieder **LIVE** und bedienbar. Eine zuvor gesetzte Abschnittspause wurde durch das
 Spielende beendet und muss gegebenenfalls erneut gesetzt werden.
 
@@ -113,7 +88,7 @@ Spielen bereit und ist auch für Operatoren verfügbar. Für ein früheres Ergeb
 anderes Spiel vorbereitet oder laufend sein.
 
 Der Dialog nennt Spiel, Termin, Play Area, Paarung und aktuellen Score. **Spiel
-zurücksetzen** leert ausschließlich dessen Scores, Seiten und sämtliche Zählerwerte;
+zurücksetzen** leert ausschließlich dessen Scores, Abschnittspunkte, Satzstand, Seiten und sämtliche Zählerwerte;
 der Abschnitt beginnt wieder bei 1, ohne Abschnittspause. Dieser Schritt ist nicht
 mit Undo rückgängig zu machen. Bei einer zwischenzeitlichen Änderung durch einen
 anderen Bediener schließt sich der Dialog; den aktuellen Stand erneut prüfen.
@@ -124,7 +99,7 @@ Turnierphase und Officials bleiben erhalten. Alle anderen Spiele, Ergebnisse und
 Veranstaltungsdaten bleiben unverändert.
 
 Frühere Bedienereignisse bleiben im Export nachvollziehbar. Undo berücksichtigt
-nur Score-Aktionen seit dem letzten Zurücksetzen dieses Spiels. Soll lediglich ein
+nur Punkte- und Satzaktionen seit dem letzten Zurücksetzen dieses Spiels. Soll lediglich ein
 versehentlich bestätigtes Ergebnis weiterbearbeitet werden, **Spiel wieder öffnen**
 nutzen: dabei bleiben die Wettkampfdaten erhalten.
 

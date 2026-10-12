@@ -15,12 +15,13 @@ Ermittlung von Finalpaarungen.
 
 - Veranstaltungen, Wettkampfflächen (Play Areas), Teilnehmer, Referees und Spielpläne
   im Browser anlegen und bearbeiten; native LiveScore-JSON-Dateien importieren und exportieren.
-- Spielstände mit **+1 / −1** erfassen und mit **UNDO** korrigieren.
+- Je nach Profil Gesamtstände oder Satzpunkte erfassen, gewonnene Sätze manuell
+  führen und Eingaben mit **UNDO** korrigieren.
 - Paarungen korrigieren, auch nach Spielbeginn durch Zurücksetzen des einzelnen Spiels;
   Links/Rechts zuordnen, Seiten wechseln
   und Ergebnisse bestätigen.
-- Sportprofile mit Abschnitten, Pausenbezeichnungen und zusätzlichen Zählern im Browser
-  verwalten; alle Profiltexte gemeinsam für DE/EN/CS pflegen. Wettkampfdaten manuell erfassen. Keine automatische Wettkampfregel-Auswertung.
+- Sieben fertige Sportprofile auswählen und im Browser anpassen;
+  alle Profiltexte gemeinsam für DE/EN/CS pflegen. Wettkampfdaten manuell erfassen. Keine automatische Wettkampfregel-Auswertung.
 - Mehrere Bediener sehen und bearbeiten gemeinsam denselben aktuellen Spielstand.
 - Oberfläche auf Englisch, Deutsch und Tschechisch; getrennte Zugänge für
   Administration und Bedienung.
@@ -73,11 +74,13 @@ anschließend das Operator-Passwort setzen. Vor Internetfreigabe beide Startpass
 
 1. Unter **Veranstaltungen** eine Veranstaltung anlegen oder eine LiveScore-JSON-Datei
    importieren und anschließend **Auswählen**.
-2. Als Admin unter **Konfiguration → Sportprofile** ein Profil anlegen oder aus der
-   Bibliothek übernehmen. Play Areas, Teilnehmer, Referees und Spielplan erfassen.
+2. Als Admin unter **Konfiguration → Sportprofile** eines der sieben Standardprofile
+   auswählen und **Für Veranstaltung übernehmen**; bei Bedarf anpassen. Play Areas,
+   Teilnehmer, Referees und Spielplan erfassen.
 3. In der **Bedienung** ein Spiel auswählen, die Paarung bestätigen oder korrigieren
    und Links/Rechts im Programmbild festlegen.
-4. Wettkampf starten und Score erfassen; bei Bedarf **UNDO** oder **Seitenwechsel**
+4. Wettkampf starten und die vorgesehenen Punkte, Satzgewinne oder Zähler erfassen;
+   bei Bedarf **UNDO** oder **Seitenwechsel**
    nutzen. Zwischen Abschnitten eine Abschnittspause setzen und den nächsten Abschnitt starten.
 5. Mit **Spiel Ende** den Endstand prüfen und **Ergebnis bestätigen**.
    Danach das nächste Spiel auswählen.
@@ -95,8 +98,8 @@ Details zu Abschnitten, Zählern, Ergebniskorrekturen und Importen stehen in der
 
 Der öffentliche Endpunkt **`GET /api/v1/live`** liefert den aktuellen Spielzustand
 als JSON mit Teilnehmern, Scores und den bereits zugeordneten Seiten `left` und
-`right`. Je nach Konfiguration sind unter anderem Spielabschnitt, Turnierphase,
-Runde, Officials und Zähler enthalten.
+`right`. Das Profil kennzeichnet, welche Daten vorgesehen sind; Abschnittspunkte, Satzgewinne,
+Pausen und feste Teilnehmerrollen sind eindeutig unterscheidbar.
 
 ```sh
 curl --fail http://localhost:8730/api/v1/live
@@ -107,11 +110,14 @@ eine Anmeldung ist für diesen Endpunkt nicht nötig. LiveScore stellt die Daten
 bereit, die Darstellung übernimmt die jeweilige Anwendung.
 [API-Dokumentation und Beispielantwort](docs/API.md).
 
+Bei der Aktualisierung über `sudo livescore --upgrade` wird auf die neue LiveScore-API umgestellt; angeschlossene Anwendungen müssen gegebenenfalls angepasst werden.
+
 ## Weiterführende Informationen
 
 - [Installation und Betrieb](docs/INSTALLATION.md): Windows-Start, Serverkonfiguration,
   Passwörter, HTTPS, Upgrade, Backup und Deinstallation.
 - [Bedienungsanleitung](docs/OPERATOR.md): Vorbereitung und Einsatz am Wettkampftag.
+- [Sportprofile](docs/SPORT_PROFILES.md): Standardprofile, Erfassungsmodi und fachliche Grundlagen.
 - [API](docs/API.md): Datenfelder, Endpunkte und Zugriffsschutz.
 - [Datenmodell](docs/DATA_MODEL.md): JSON-Format, Sportprofile und Persistenz.
 - [Entwicklung](docs/DEVELOPMENT.md): Codeaufbau, Tests und offene Produktentscheidungen.

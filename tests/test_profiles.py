@@ -77,16 +77,16 @@ class ProfileTest(unittest.TestCase):
         self.action('start')
 
     def test_library_crud_revision_dedup_failure_and_restart(self):
-        self.assertFalse((self.directory/'sport-profiles.json').exists())
+        self.assertTrue((self.directory/'sport-profiles.json').exists())
         listing=self.client.get('/api/v1/sport-profiles').json()
-        self.assertEqual(listing['profiles'],[])
+        self.assertEqual(len(listing['profiles']),7)
         self.assertEqual(listing['event_profiles'][0]['id'],'prague')
         original=self.state()['event']
         self.request('sport-profiles/save',id='boxing',profile=boxing().model_dump())
         stored=(self.directory/'sport-profiles.json').read_bytes()
         self.assertEqual(self.state()['event'],original)
         s=self.state()
-        payload=dict(request_id=str(uuid4()),catalog_session=s['stream_id'],expected_revision=1,id='boxing',profile=boxing().model_dump())
+        payload=dict(request_id=str(uuid4()),catalog_session=s['stream_id'],expected_revision=self.app.state.service.profiles.revision,id='boxing',profile=boxing().model_dump())
         payload['profile']['periods']=5
         response=self.client.post('/api/v1/sport-profiles/save',json=payload)
         self.assertEqual(response.status_code,200)
@@ -103,7 +103,7 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(self.client.get('/api/v1/sport-profiles').json(),before)
         self.assertNotEqual((self.directory/'sport-profiles.json').read_bytes(),stored)
         self.request('sport-profiles/delete',id='boxing')
-        self.assertEqual(self.client.get('/api/v1/sport-profiles').json()['profiles'],[])
+        self.assertEqual(len(self.client.get('/api/v1/sport-profiles').json()['profiles']),7)
         self.assertEqual(self.state()['event'],original)
         self.request('sport-profiles/delete',409,id='boxing')
 
@@ -133,7 +133,7 @@ class ProfileTest(unittest.TestCase):
             path=Path(temp);save(path/'events/archive.json',State.model_validate(exported))
             with TestClient(create_app(data_dir=path,auth_config=AuthConfig(enabled=False))) as other:
                 self.assertEqual(other.get('/api/v1/event-catalog/archive/export').json(),exported)
-                self.assertFalse((path/'sport-profiles.json').exists())
+                self.assertTrue((path/'sport-profiles.json').exists())
         self.assertEqual(exported['matches'][0]['counters']['notices']['bsc-praha'],{'1':1,'2':1})
 
     def test_used_structure_locked_but_texts_thresholds_and_order_remain_editable(self):
@@ -174,7 +174,7 @@ class ProfileTest(unittest.TestCase):
         profile=boxing();profile.sport='showdown';profile.ruleset='football';profile.translations['en'].period_label='Name'
         self.apply_profile(profile);self.start()
         self.assertEqual(self.state()['live']['period_info']['code'],'period_1')
-        self.assertEqual(self.state()['live']['period_info']['labels']['en'],'1. Name')
+        self.assertEqual(self.state()['live']['period_info']['labels']['en'],'Name 1')
         with self.assertRaises(ValidationError):SportProfile.model_validate(dict(profile.model_dump(),translations={'fr':{}}))
         with self.assertRaises(ValidationError):ProfileLibrary(profiles=[ProfileEntry(id='x',profile=profile)]*2)
 
@@ -220,6 +220,6 @@ class ProfilePermissionsTest(unittest.TestCase):
                 client.cookies.clear();headers=login('admin')
                 self.assertEqual(client.get('/api/v1/sport-profiles').status_code,200)
                 s=client.get('/api/v1/tournament').json()
-                payload=dict(request_id=str(uuid4()),catalog_session=s['stream_id'],expected_revision=0,id='boxing',profile=boxing().model_dump())
+                payload=dict(request_id=str(uuid4()),catalog_session=s['stream_id'],expected_revision=client.app.state.service.profiles.revision,id='boxing',profile=boxing().model_dump())
                 self.assertEqual(client.post('/api/v1/sport-profiles/save',json=payload).status_code,403)
                 self.assertEqual(client.post('/api/v1/sport-profiles/save',json=payload,headers=headers).status_code,200)

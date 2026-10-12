@@ -236,11 +236,13 @@ die Passwortverwaltung ist deaktiviert.
 
 Sportprofile sowie Anlegen und Importieren von Veranstaltungen sind Admin-Aufgaben.
 Die Profilbibliothek liegt in `data_dir/sport-profiles.json` und ist in den vorhandenen
-Daten-Backups und Upgrade-Sicherungen enthalten. **Version 0.2.1** kann über
-`sudo livescore --upgrade` von GitHub/main installiert werden; bestehende
-Veranstaltungen benötigen keine manuelle Migration. Die geänderten generischen
-[Abschnittscodes der API](API.md#kompatibilität-abschnittspausen-und-wiederöffnen-issue-5)
-sollten externe Anzeigen berücksichtigen.
+Daten-Backups und Upgrade-Sicherungen enthalten. **Version 0.2.2** kann über
+`sudo livescore --upgrade` von GitHub/main installiert werden. Die sieben
+Standardprofile erscheinen automatisch in **Konfiguration → Sportprofile**;
+bestehende Veranstaltungsprofile und Administratoränderungen bleiben erhalten.
+Es ist kein zusätzlicher Importbefehl nötig. Vorhandene Veranstaltungsdateien benötigen
+keine manuelle Migration. Externe Anwendungen müssen die [aktuelle Live-API](API.md)
+mit Anzeigevorgaben und nullable Werten berücksichtigen.
 
 ### Admin-Passwort vergessen
 

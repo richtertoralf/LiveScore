@@ -71,8 +71,9 @@ async def run(executable):
                         if index==1:await card.locator('[name=reset_each_period]').uncheck()
                     await click(admin,'[data-profile=save]')
                     await expect(admin.locator('#message')).to_contain_text('Library profile saved')
-                    profiles=(await library())['profiles'];assert len(profiles)==1
-                    profile_id=profiles[0]['id'];counter_ids=[c['id'] for c in profiles[0]['profile']['counters']]
+                    profiles=(await library())['profiles'];assert len(profiles)==8
+                    custom=next(p for p in profiles if not p['id'].startswith('standard-'))
+                    profile_id=custom['id'];counter_ids=[c['id'] for c in custom['profile']['counters']]
                     # Edit conflict: an open admin draft must not overwrite another admin's changes.
                     await other.locator('#profile-source').select_option('library:'+profile_id)
                     await other.locator('#profile-en-name').fill('Stale draft')
@@ -118,13 +119,13 @@ async def run(executable):
                     # Full translations, counters, hints and breaks on the operator's selected language.
                     for lang in ('de','cs','en'):
                         await operator.locator(f'[data-lang={lang}]').click()
-                        await expect(operator.locator('#period-label')).to_contain_text('1. '+names[lang][1])
+                        await expect(operator.locator('#period-label')).to_contain_text(names[lang][1]+' 1' if lang=='en' else '1. '+names[lang][1])
                         await expect(operator.locator('.profile-hint')).to_have_text(names[lang][3])
                         await expect(operator.locator(f'#counter-L-{counter_ids[0]} .counter-notice')).to_have_text(lang+' Critical')
                     await click(operator,'[data-action=intermission]')
                     await expect(operator.locator('.status')).to_have_text('Round break')
                     await click(operator,'[data-action=period-dialog]');await click(operator,'#period-confirm')
-                    await expect(operator.locator('#period-label')).to_contain_text('2. Segment')
+                    await expect(operator.locator('#period-label')).to_contain_text('Segment 2')
                     await expect(operator.locator(f'#counter-L-{counter_ids[0]} .counter-value')).to_have_text('0')
                     await expect(operator.locator(f'#counter-L-{counter_ids[1]} .counter-value')).to_have_text('3')
                     live=(await state())['live']
@@ -137,15 +138,15 @@ async def run(executable):
                     before=(await state())['matches']
                     await admin.locator('#profile-en-period_label').fill('Name')
                     await click(admin,'#profile-apply')
-                    await expect(operator.locator('#period-label')).to_contain_text('2. Name')
+                    await expect(operator.locator('#period-label')).to_contain_text('Name 2')
                     assert (await state())['matches']==before
                     # Editing/deleting the library leaves the event copy intact.
                     await admin.locator('#profile-source').select_option('library:'+profile_id);await admin.locator('#profile-periods').fill('8')
                     await click(admin,'[data-profile=save]');await expect(admin.locator('#message')).to_contain_text('Library profile saved')
                     assert (await state())['event']['sport_profile']['periods']==4
                     admin.on('dialog',lambda dialog:dialog.accept())
-                    await click(admin,'[data-profile=delete]');await expect(admin.locator('#profile-source option')).to_have_count(4)
-                    assert (await library())['profiles']==[]
+                    await click(admin,'[data-profile=delete]');await expect(admin.locator('#profile-source option')).to_have_count(11)
+                    assert len((await library())['profiles'])==7
                     assert (await state())['event']['sport_profile']['periods']==4
                     exported=await (await admin.request.get(url+'/api/v1/event-catalog/prague-2026/export')).json()
                     assert exported['event']['sport_profile']['translations']['en']['period_label']=='Name'

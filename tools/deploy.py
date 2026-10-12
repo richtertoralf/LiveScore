@@ -250,6 +250,10 @@ class Deployment:
         target = self.build(source)
         switched = False
         stopped = False
+        profile_path = None
+        old_profiles = None
+        old_profiles_mode = 0o600
+        profiles_changed = False
         was_active = self.active()
         old_unit = self.unit.read_bytes() if self.unit.exists() else None
         try:
@@ -268,7 +272,6 @@ class Deployment:
             if not upgrade:
                 run(target / '.venv/bin/python', '-m', 'livescore.bootstrap', '--config', self.config_file,
                     '--seed', target / 'imports/prague-2026.json', cwd=target)
-            self.account()
             # Download/build/validation happen while the old service is still running.
             if was_active:
                 self.systemctl('stop', UNIT)
@@ -279,6 +282,14 @@ class Deployment:
                 shutil.copytree(self.config, backup / 'config')
                 if (self.state / 'data').exists():
                     shutil.copytree(self.state / 'data', backup / 'data', ignore=shutil.ignore_patterns('*.lock'))
+            profile_path = Path(info['data_dir']) / 'sport-profiles.json'
+            old_profiles = profile_path.read_bytes() if profile_path.exists() else None
+            if old_profiles is not None:
+                old_profiles_mode = profile_path.stat().st_mode & 0o777
+            run(target / '.venv/bin/python', '-m', 'livescore.bootstrap', '--config', self.config_file,
+                '--profiles', cwd=target)
+            profiles_changed = True
+            self.account()
             self.switch(target)
             switched = True
             atomic_text(self.unit, (target / 'systemd' / UNIT).read_text())
@@ -313,6 +324,12 @@ class Deployment:
                 else:
                     self.unit.unlink(missing_ok=True)
                 restore(self.systemctl, 'daemon-reload')
+            if profiles_changed:
+                if old_profiles is None:
+                    restore(profile_path.unlink)
+                else:
+                    restore(atomic_text, profile_path, old_profiles.decode(), old_profiles_mode)
+                restore(self.account)
             if stopped:
                 restore(self.systemctl, 'start', UNIT)
             if self.current.resolve() != target:

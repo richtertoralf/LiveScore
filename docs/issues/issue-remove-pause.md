@@ -68,11 +68,11 @@ Eine beim Spielende aufgehobene Abschnittspause wird nicht automatisch rekonstru
   dafür `status: "live"`. Die tatsächliche Abschnittspause steht unabhängig davon
   in `period_info.intermission`.
 - Rohe Match-Daten und Exporte behalten gegebenenfalls `paused`. Die alten
-  `pause`-/`resume`-Endpunkte bleiben mit ihren Validierungen erhalten, sind aber
-  in OpenAPI veraltet und in der GUI nicht vorhanden.
+  `pause`-/`resume`-Endpunkte wurden mit 0.2.2 entfernt. Abschnittspausen werden
+  ausschließlich über `intermission` bedient.
 - Externe Anwendungen dürfen nach Wiederöffnen nicht mehr zwingend `resume`
   senden. Pausenanzeigen müssen `period_info.intermission` statt `status == paused`
-  auswerten. [Details im API-Vertrag](../API.md#kompatibilität-abschnittspausen-und-wiederöffnen-issue-5).
+  auswerten. [Details im API-Vertrag](../API.md#upgrade-und-api-umstellung).
 - Der direkte API-Abschnittswechsel bleibt erlaubt. Die GUI führt ihn über die Pause;
   es wird keine zusätzliche Regelpflicht im Backend eingeführt.
 

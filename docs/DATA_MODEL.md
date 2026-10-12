@@ -29,7 +29,7 @@ Ein Match enthält Planfelder wie `id`, `date`, `time`, `play_area_id`,
 von Referee-IDs. `stage` beschreibt die Turnierphase, `round` die Gruppe oder
 Spielrunde. `stage_label` und `round_label` sind optionale englische Anzeigetexte.
 Hinzu kommen `status`, `side_l`, `side_r`, `scores`, `control_revision`, `period`,
-`intermission` und `counters`.
+`intermission`, `counters`, `period_scores` und `sets_won`.
 
 Länder werden als zweistellige Codes für ISO 3166-1 Alpha-2 geführt, etwa `CZ`,
 `DE`, `KZ` und `GR`; ohne Angabe steht `""`. Eingaben werden getrimmt und
@@ -72,14 +72,13 @@ Auswählbar sind geplante oder beendete Spiele, solange kein anderes Spiel
 `ready`, `live` oder `paused` ist. `idle` ist ein API-Zustand ohne ausgewähltes Spiel,
 kein gespeicherter Match-Status.
 
-`paused` und die bisherigen `pause`-/`resume`-Aktionen bleiben ausschließlich für
-Bestandsdaten und ältere API-Clients unterstützt. Neue Bedienabläufe benötigen sie
-nicht. Die aufbereitete Live-Ausgabe stellt `paused` als `live` dar; der rohe State
+`paused` wird ausschließlich als gespeicherter Bestandszustand unterstützt.
+Die bisherigen `pause`-/`resume`-API-Aktionen sind entfernt. Die aufbereitete Live-Ausgabe stellt `paused` als `live` dar; der rohe State
 und Exporte behalten den gespeicherten Wert. Es ist keine Datenmigration erforderlich.
 
 ## Sportprofil
 
-`event.sport_profile` konfiguriert Abschnitte und teilnehmerbezogene Zähler.
+`event.sport_profile` konfiguriert Erfassung und Anzeige, Abschnitte, feste Rollen und teilnehmerbezogene Zähler.
 Der Admin pflegt es über **Konfiguration → Sportprofile**. Die Veranstaltung speichert
 eine vollständige Kopie, ohne Laufzeitverweis auf die Bibliothek. Beispiel:
 
@@ -122,6 +121,46 @@ verwenden zunächst `sport: "generic"`; der sichtbare Name steht in `translation
 und keine automatische Sportregel. Wenn beide Schwellen gesetzt sind, muss
 `warning_at` kleiner als `critical_at` sein.
 
+### Punkte und Satzstand
+
+`score_mode` ist `total`, `period` oder `none`; fehlend bedeutet `total`.
+`score_steps` enthält eindeutige positive Ganzzahlen (Default `[1]`),
+`sets_enabled` aktiviert den manuellen Satzstand (Default `false`).
+`show_details` und `show_officials` sind standardmäßig `true`.
+
+`match.scores[participant_id]` ist bei `total` der Gesamtstand, bei `period` nur der
+aktuelle Abschnitt. `none` führt intern vorbereitete Nullwerte für die Paarung;
+die öffentliche API liefert ausdrücklich `score: null`, keinen erfundenen Spielstand.
+Bei `period` liegen alle erfassten Abschnitte unter
+`period_scores[period_als_string][participant_id]`. Aktuelle Abschnittspunkte müssen
+exakt mit `scores` übereinstimmen. Abschnittswechsel speichert frühere Werte und legt
+für den neuen Abschnitt echte Nullwerte an. Es wird kein Gesamtstand summiert.
+
+`sets_won[participant_id]` speichert manuelle Satzgewinne, unabhängig von Punkten
+und ohne automatische Gewinnerermittlung. Fehlende `period_scores` und `sets_won`
+werden als `{}` geladen. Bei deaktivierter Satzerfassung sind keine Satzwerte erlaubt;
+bei aktivierter Satzerfassung ohne importierte Werte liefert die API `null`.
+Vorbereitung initialisiert Nullwerte. Alle erfassten Zahlen sind nichtnegativ und
+teilnehmerbezogen; vor Spielbeginn müssen sie null sein.
+
+Punkteereignisse können konfigurierte Schritte mit positivem oder negativem
+Vorzeichen enthalten. Bei `period` tragen sie die betroffene `period`.
+Manuelle Satzereignisse haben `type: "sets"` und `delta: 1` oder `-1`.
+Undo korrigiert den ursprünglichen Abschnitt oder Satzstand; eine Änderung an einem
+früheren Abschnitt ersetzt niemals die aktuellen Abschnittspunkte.
+
+`roles` ordnet `participant_1` und `participant_2` je `{id, labels: {de, en, cs}}` zu.
+Die Rollen-IDs sind innerhalb des Profils eindeutig, unabhängig von den Beschriftungen.
+Im Boxprofil lauten sie `red` und `blue`; das Programm behandelt sie wie alle anderen
+Rollen-IDs. Zuordnung über die Paarung, niemals über `side_l` / `side_r`.
+
+`enabled` an einer Counterdefinition ist standardmäßig `true`. Ausblenden erhält
+historische Werte, verhindert aber neue Bedienaktionen und entfernt den Counter aus
+der öffentlichen Werteanzeige. Die Definition bleibt im Profil verfügbar.
+
+Standardprofile und die gemeinsame Pflege aller drei Sprachen sind in
+[SPORT_PROFILES.md](SPORT_PROFILES.md) beschrieben.
+
 Die Historie liegt unter `counters[counter_id][participant_id][period_als_string]`.
 Zähler sind nie an eine Seite gebunden. Beim nächsten Abschnitt startet
 `reset_each_period: true` bei null, andernfalls wird der bisherige Wert übernommen.
@@ -133,11 +172,11 @@ Abschnitt 1 und Nullwerte.
 `intermission` kennzeichnet ausschließlich eine Pause vor dem nächsten Abschnitt.
 Ein Abschnittswechsel und das Spielende setzen sie zurück. Wiederöffnen setzt den
 Status direkt auf `live` und stellt keine frühere Abschnittspause automatisch wieder her.
-Die Struktur (`periods`, Counter-IDs und `reset_each_period`) ist ab Vorbereitung
+Die Struktur (`periods`, `score_mode`, `sets_enabled`, Counter-IDs und `reset_each_period`) ist ab Vorbereitung
 festgelegt; nach Zurücknehmen der Vorbereitung ist sie wieder bearbeitbar, sofern
 alle Spiele wieder geplant sind. Das gilt auch nach ausdrücklichem Zurücksetzen
 aller Spiele; alte Ereignisse beschreiben dann keine aktuellen Ergebnisse mehr.
-Texte, Schwellen und Zählerreihenfolge bleiben bearbeitbar.
+Texte, Punkteschritte, Rollenbezeichnungen, Sichtbarkeit, Schwellen und Zählerreihenfolge bleiben bearbeitbar.
 Vor dem ersten Spiel werden bei Strukturänderungen nur leere Counterhistorien
 neu initialisiert. Erfasste Werte werden niemals durch Profilpflege gelöscht.
 
@@ -150,7 +189,7 @@ unbekannte Versionen werden abgewiesen.
 ### Mehrsprachigkeit und Bibliothek
 
 Ein Profil enthält alle Sprachen unter `translations.de`, `.en` und `.cs`:
-`name`, `period_label`, `break_label` und `hint`. Counter verwenden dort
+`name`, `period_label`, `break_label`, `score_label`, `sets_label` und `hint`. Counter verwenden dort
 `label`, `warning_label` und `critical_label`. Keine separaten Sprachdateien.
 Abschnittsnummern gehören weiterhin zum Match (`period`), nicht zur Vorlage.
 
@@ -160,8 +199,9 @@ unverändert; leere Warntexte erhalten einen neutralen Hinweis. Lesen schreibt k
 Dateien um. Speichern im Editor hält alle drei Sprachen gemeinsam im Profil fest.
 
 `data/sport-profiles.json` enthält `schema_version: 1`, eine eigene `revision` und
-`profiles: [{"id": "…", "profile": {…}}]`. Die Bibliothek startet leer, wenn die Datei
-fehlt, und wird erst durch Speichern angelegt. Eingebettete Profile werden als Vorlagen
+`profiles: [{"id": "…", "profile": {…}}]`. Fehlt die Datei, wird sie mit den sieben Standardprofilen angelegt.
+`bundled_profiles` merkt sich bereits bereitgestellte Standard-IDs, auch nach einer
+bewussten Löschung. Wiederholte Bereitstellung überschreibt keine Profile. Eingebettete Profile werden als Vorlagen
 angeboten, ohne automatische Migration oder Kopplung. Neue Bibliotheks-IDs und Counter-IDs
 werden in der GUI erzeugt; beim Bearbeiten bleiben sie stabil. Eine zentrale Datei ist
 für diese kleine Bibliothek einfacher atomar zu speichern und zu sichern als mehrere Dateien.
@@ -179,7 +219,7 @@ andere Wettkampfstruktur; dafür eine neue Veranstaltung samt Spielplan anlegen.
 data/
   events/<event-id>.json
   imports/<event-id>.json
-  sport-profiles.json        # unabhängig gespeicherte Vorlagen, optional
+  sport-profiles.json        # unabhängig gespeicherte Vorlagen und bereitgestellte Standard-IDs
   active-event.json
   active-event.json.lock
   tournament.json          # gegebenenfalls unveränderte Legacy-Datei
@@ -208,14 +248,14 @@ Datei im selben Verzeichnis geschrieben, geflusht und mit `fsync` gesichert.
 `os.replace` ersetzt die Zieldatei atomar. Erst danach werden Serverzustand und
 Browser aktualisiert. Ein Schreibfehler übernimmt die Änderung nicht.
 
-Die Ereignisliste speichert relevante Zustandswechsel und Score-/Zähleraktionen
+Die Ereignisliste speichert relevante Zustandswechsel und Punkte-/Satz-/Zähleraktionen
 mit Spiel-/Teilnehmerbezug, Zeitstempel, Revision und Request-ID. Score-Undo markiert
 das ursprüngliche Ereignis als zurückgenommen und verweist darauf.
 `match_reset` bildet die Grenze zwischen zwei Spielversuchen derselben Match-ID.
-Zurücksetzen erhält Planfelder und Ereignisse; es leert Scores, Seiten und Counter,
+Zurücksetzen erhält Planfelder und Ereignisse; es leert Scores, Abschnittspunkte, Satzstand, Seiten und Counter,
 setzt `period: 1`, `intermission: false` und `status: scheduled`. Die Kontrollrevision
 steigt weiter und bleibt auch bei anschließender Spielplanbearbeitung erhalten.
-Validierung und Undo prüfen die aktuellen Scores ausschließlich gegen Score-Ereignisse
+Validierung und Undo prüfen die aktuellen Scores ausschließlich gegen Punkte-/Satzereignisse
 nach der letzten Reset-Grenze. Ältere Score-Ereignisse müssen weiterhin auf bekannte
 Spiele und Teilnehmer verweisen und ein gültiges Delta besitzen; sie dürfen zur
 früheren, inzwischen korrigierten Paarung gehören. Ihre Undo-Markierungen bleiben
@@ -223,7 +263,7 @@ unverändert. Andere Spiele erhalten keine neue Undo-Grenze.
 
 Die Liste bleibt für die Veranstaltung erhalten und ermöglicht auch nach Neustart
 die Erkennung wiederholter Spiel-/Konfigurationsrequests. Counter werden mit
-Gegenbuchungen korrigiert; Undo betrifft ausschließlich Scores.
+Gegenbuchungen korrigiert; Undo betrifft Punkte und manuell erfasste Satzgewinne.
 
 Atomare Speicherung ersetzt kein Backup. [Sicherung und Wiederherstellung](INSTALLATION.md#backup)
 beschreibt die benötigten Dateien.

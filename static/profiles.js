@@ -6,10 +6,11 @@ const languages = ['de','en','cs'];
 let library = null, source = 'event', selection = null, dirty = false, loading = false;
 let eventProfileSignature = null;
 let draft = null, formRevision = null, formContext = null, formLibraryRevision = null;
-const sameStructure = (a,b) => JSON.stringify([a?.periods || 1,(a?.counters || []).map(c => [c.id,c.reset_each_period]).sort()]) === JSON.stringify([b?.periods || 1,(b?.counters || []).map(c => [c.id,c.reset_each_period]).sort()]);
+const structure = p => [p?.periods || 1, (p?.counters || []).map(c => [c.id,c.reset_each_period]).sort(), p?.score_mode || 'total', p?.sets_enabled || false];
+const sameStructure = (a,b) => JSON.stringify(structure(a)) === JSON.stringify(structure(b));
 function fresh() {
-  return {sport:'generic',ruleset:'',periods:1,period_label:'Abschnitt',counters:[],
-    translations:Object.fromEntries(languages.map(lang => [lang,{name:'',period_label:{de:'Abschnitt',en:'Period',cs:'Část'}[lang],break_label:{de:'Pause zwischen Abschnitten',en:'Break between periods',cs:'Přestávka mezi částmi'}[lang],hint:''}]))};
+  return {sport:'generic',ruleset:'',periods:1,period_label:'Abschnitt',counters:[],score_mode:'total',score_steps:[1],sets_enabled:false,roles:{},show_details:true,show_officials:true,
+    translations:Object.fromEntries(languages.map(lang => [lang,{name:'',period_label:{de:'Abschnitt',en:'Period',cs:'Část'}[lang],break_label:{de:'Pause zwischen Abschnitten',en:'Break between periods',cs:'Přestávka mezi částmi'}[lang],hint:'',score_label:'',sets_label:{de:'Gewonnene Sätze',en:'Sets won',cs:'Vyhrané sety'}[lang]}]))};
 }
 function languageInputs(labels, fields, prefix) {
   return `<div class="profile-languages">${languages.map(lang => `<section><h3>${lang.toUpperCase()}</h3>${fields.map(([key,title,required]) => `<label for="${prefix}-${lang}-${key}">${t(title)}</label><input id="${prefix}-${lang}-${key}" data-profile-language="${lang}" data-text="${key}" value="${e(labels?.[lang]?.[key])}" ${required ? 'required' : ''} maxlength="${key === 'hint' ? 500 : 200}">`).join('')}</section>`).join('')}</div>`;
@@ -18,10 +19,15 @@ function read() {
   if (!draft) return;
   const form = $('#profile-form');
   draft.periods = Number(form.querySelector('[name=periods]').value);
+  draft.score_mode = form.querySelector('[name=score_mode]').value;
+  draft.score_steps = form.querySelector('[name=score_steps]').value.split(',').map(s => Number(s.trim()));
+  for (const key of ['sets_enabled','show_details','show_officials']) draft[key] = form.querySelector(`[name=${key}]`).checked;
+  draft.roles = form.querySelector('[name=roles_enabled]').checked ? Object.fromEntries(['participant_1','participant_2'].map((role,index) => [role,{id:draft.roles[role]?.id || uuid(),labels:Object.fromEntries(languages.map(lang => [lang,form.querySelector(`#role-${index}-${lang}-label`).value.trim()]))}])) : {};
   for (const input of form.querySelectorAll('#profile-texts input')) draft.translations[input.dataset.profileLanguage][input.dataset.text] = input.value.trim();
   draft.period_label = draft.translations.de.period_label || draft.period_label;
   for (const card of form.querySelectorAll('[data-counter-id]')) {
     const counter = draft.counters.find(c => c.id === card.dataset.counterId);
+    counter.enabled = card.querySelector('[name=enabled]').checked;
     counter.reset_each_period = card.querySelector('[name=reset_each_period]').checked;
     for (const key of ['warning_at','critical_at']) counter[key] = card.querySelector(`[name=${key}]`).value === '' ? null : Number(card.querySelector(`[name=${key}]`).value);
     for (const input of card.querySelectorAll('[data-text]')) counter.translations[input.dataset.profileLanguage][input.dataset.text] = input.value.trim();
@@ -40,14 +46,22 @@ function editor(app) {
       <option value="new">${t('Neues Profil')}</option><option value="none">${t('Ohne Sportprofil')}</option>
       ${(library?.profiles || []).map(p => `<option value="library:${e(p.id)}">${e(profileText(p.profile,'name'))}</option>`).join('')}
       ${(library?.event_profiles || []).filter(p => p.id !== state.active_event_id).map(p => `<option value="event:${e(p.id)}">${e(p.event_name)} · ${e(profileText(p.profile,'name'))}</option>`).join('')}</select>
-    <p id="profile-status" class="muted">${used ? t('Abschnittsanzahl und bestehende Zähler sind in dieser Veranstaltung bereits verwendet. Texte und Anzeigegrenzen können weiterhin geändert werden.') : t('Alle Profilfelder sind vor der Vorbereitung des ersten Spiels bearbeitbar.')}</p>
+    <p id="profile-status" class="muted">${used ? t('Erfassungsstruktur bereits verwendet. Bezeichnungen und Anzeigeoptionen bleiben bearbeitbar.') : t('Alle Profilfelder sind vor der Vorbereitung des ersten Spiels bearbeitbar.')}</p>
     <form id="profile-form"><fieldset id="profile-edit">
       ${draft ? `<fieldset data-profile-structure><label for="profile-periods">${t('Anzahl der Abschnitte')}</label><input id="profile-periods" name="periods" type="number" min="1" step="1" required value="${draft.periods}"></fieldset>
-      <div id="profile-texts">${languageInputs(draft.translations,[['name','Profilname',true],['period_label','Abschnittsbezeichnung',true],['break_label','Pausenbezeichnung',true],['hint','Hinweis (optional)',false]],'profile')}</div>
+      <fieldset data-profile-structure><label for="profile-score-mode">${t('Punkteerfassung')}</label><select id="profile-score-mode" name="score_mode">${[['total','Fortlaufender Punktestand'],['period','Punkte je Abschnitt'],['none','Kein Punktestand']].map(([value,label]) => `<option value="${value}" ${draft.score_mode===value ? 'selected' : ''}>${t(label)}</option>`).join('')}</select>
+      <label class="checkbox"><input name="sets_enabled" type="checkbox" ${draft.sets_enabled ? 'checked' : ''}>${t('Gewonnene Sätze manuell erfassen')}</label></fieldset>
+      <label for="profile-score-steps">${t('Punkteschritte (z. B. 1, 2)')}</label><input id="profile-score-steps" name="score_steps" required pattern="[0-9]+([ ]*,[ ]*[0-9]+)*" value="${draft.score_steps.join(', ')}">
+      <label class="checkbox"><input name="show_details" type="checkbox" ${draft.show_details ? 'checked' : ''}>${t('Spielplanangaben in der Bedienung anzeigen')}</label>
+      <label class="checkbox"><input name="show_officials" type="checkbox" ${draft.show_officials ? 'checked' : ''}>${t('Officials in der Bedienung anzeigen')}</label>
+      <label class="checkbox"><input name="roles_enabled" type="checkbox" ${Object.keys(draft.roles).length ? 'checked' : ''}>${t('Feste Rollen für Teilnehmer 1 und 2')}</label>
+      <div id="profile-roles">${['participant_1','participant_2'].map((role,index) => `<h3>${t(index===0 ? 'Teilnehmer 1' : 'Teilnehmer 2')}</h3>${languageInputs(Object.fromEntries(languages.map(lang => [lang,{label:draft.roles[role]?.labels?.[lang] || ''}])),[['label','Rollenbezeichnung',false]],`role-${index}`)}`).join('')}</div>
+      <div id="profile-texts">${languageInputs(draft.translations,[['name','Profilname',true],['period_label','Abschnittsbezeichnung',true],['break_label','Pausenbezeichnung',true],['hint','Hinweis (optional)',false],['score_label','Punktebezeichnung',false],['sets_label','Satzstandbezeichnung',false]],'profile')}</div>
       <h2>${t('Zähler')}</h2><p class="muted">${t('Anzeigegrenzen ändern nur die Hervorhebung. Werte werden nicht begrenzt und keine Regeln ausgewertet.')}</p>
       <div id="profile-counters">${draft.counters.map((counter,index) => `<article class="profile-counter" data-counter-id="${e(counter.id)}"><h3>${t('Zähler')} ${index+1}</h3>
         ${languageInputs(counter.translations,[['label','Bezeichnung',true],['warning_label','Warnhinweis',false],['critical_label','Kritischer Hinweis',false]],`counter-${index}`)}
         <div class="form-grid"><div><label for="counter-${index}-warning_at">${t('Warnschwelle (optional)')}</label><input id="counter-${index}-warning_at" name="warning_at" type="number" min="0" step="1" value="${counter.warning_at ?? ''}"></div><div><label for="counter-${index}-critical_at">${t('Kritische Schwelle (optional)')}</label><input id="counter-${index}-critical_at" name="critical_at" type="number" min="0" step="1" value="${counter.critical_at ?? ''}"></div></div>
+        <label class="checkbox"><input name="enabled" type="checkbox" ${counter.enabled ? 'checked' : ''}>${t('Zähler anzeigen und bedienen')}</label>
         <fieldset data-profile-structure><label class="checkbox"><input name="reset_each_period" type="checkbox" ${counter.reset_each_period ? 'checked' : ''}>${t('Beim nächsten Abschnitt auf null setzen')}</label><button type="button" data-profile="remove-counter" data-id="${e(counter.id)}">${t('Zähler entfernen')}</button></fieldset></article>`).join('')}</div>
       <fieldset data-profile-structure><button type="button" data-profile="add-counter">${t('Zähler hinzufügen')}</button></fieldset>` : `<p>${t('Ohne Sportprofil wird ein Wettkampf ohne zusätzliche Abschnittssteuerung und Zähler erfasst.')}</p>`}
       <div class="stack profile-buttons"><button type="submit" class="primary" id="profile-apply" data-disabled="${!state.event}">${t('Für Veranstaltung übernehmen')}</button>
@@ -56,7 +70,14 @@ function editor(app) {
       <button type="button" data-profile="reload">${t('Gespeicherten Stand laden')}</button></div></fieldset></form></details>`;
   $('#profile-source').value = source;
   $('#profile-form').querySelectorAll('[data-profile-structure]').forEach(f => f.disabled = structureLocked);
-  $('#profile-form').oninput = () => { dirty = true; };
+  const roleControls = () => {
+    if (!draft) return;
+    const enabled = $('#profile-form [name=roles_enabled]').checked;
+    $('#profile-roles').hidden = !enabled;
+    $('#profile-roles').querySelectorAll('input').forEach(input => input.required = enabled);
+  };
+  roleControls();
+  $('#profile-form').oninput = () => { dirty = true; roleControls(); };
   $('#profile-source').onchange = event => {
     if (dirty && !confirm(t('Ungespeicherte Profiländerungen verwerfen?'))) { event.target.value = source; return; }
     source = event.target.value; load(app);
@@ -64,7 +85,7 @@ function editor(app) {
   $('#profile-form').onsubmit = async event => {
     event.preventDefault(); read();
     if (used && !sameStructure(state.event.sport_profile,draft)) {
-      message(t('Die Profilstruktur ist bereits verwendet. Nur Bezeichnungen und Anzeigegrenzen übernehmen.')); return;
+      message(t('Die Profilstruktur ist bereits verwendet. Nur Bezeichnungen und Anzeigeoptionen übernehmen.')); return;
     }
     if (await app.send('config/sport-profile',{data:{sport_profile:draft}},formRevision,formContext)) {
       source = 'event'; load(app); message(t('Sportprofil für diese Veranstaltung gespeichert. Die Bibliothek bleibt unverändert.'));
@@ -90,7 +111,7 @@ function editor(app) {
     }
     if (action === 'copy') source = 'new';
     if (action === 'remove-counter') draft.counters = draft.counters.filter(c => c.id !== button.dataset.id);
-    if (action === 'add-counter') draft.counters.push({id:uuid(),label:'Counter',scope:'participant',reset_each_period:true,warning_at:null,critical_at:null,warning_label:'',critical_label:'',translations:Object.fromEntries(languages.map(lang => [lang,{label:'',warning_label:'',critical_label:''}]))});
+    if (action === 'add-counter') draft.counters.push({id:uuid(),label:'Counter',scope:'participant',enabled:true,reset_each_period:true,warning_at:null,critical_at:null,warning_label:'',critical_label:'',translations:Object.fromEntries(languages.map(lang => [lang,{label:'',warning_label:'',critical_label:''}]))});
     dirty = true; editor(app); app.controls();
   };
 }

@@ -11,7 +11,7 @@ from pydantic import Field, TypeAdapter
 
 from . import storage
 from .models import Count, Event, ID, Model, SportProfile, State
-from .profiles import ProfileEntry, ProfileLibrary, save_library
+from .profiles import provision_profiles, ProfileEntry, ProfileLibrary, save_library
 from .service import Conflict, Service, current_match, persist
 
 
@@ -116,6 +116,7 @@ class Catalog(Service):
         active = self.selection.active_event_id
         if active is not None and active not in self.states:
             raise ValueError('Aktive Veranstaltung fehlt. Keine automatische Rücksetzung.')
+        self.profiles = provision_profiles(self.profiles_path)
         self.stream_id = str(uuid4())
         self.stream_revision = 0
         self.preview_secret = secrets.token_bytes(32)
@@ -147,6 +148,14 @@ class Catalog(Service):
                     selection_token=str(self.selection.selection_token), catalog=self.listing(),
                     stream_id=self.stream_id, stream_revision=self.stream_revision,
                     profile_library_revision=self.profiles.revision)
+
+    def live(self):
+        result = super().live()
+        result['source'] = dict(available=True, instance_id=self.stream_id,
+                                revision=self.stream_revision,
+                                event_id=self.selection.active_event_id,
+                                selection_token=str(self.selection.selection_token))
+        return result
 
     async def profile_apply(self, operation, command):
         signature = hashlib.sha256(('profile/' + operation + command.model_dump_json()).encode()).hexdigest()

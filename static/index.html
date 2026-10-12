@@ -18,7 +18,7 @@
     <p id="event-name" class="muted"></p>
     <p id="message" role="alert"></p>
     <section id="live" aria-label="Match controls" data-i18n-aria="Spielbedienung"><p><span data-i18n="Spielstand wird geladen …">Loading match state…</span></p></section>
-    <footer><span data-i18n="L / R = links / rechts im Programmbild. Scores gehören zum Teilnehmer.">L / R = left / right in the program image. Scores belong to participants.</span></footer>
+    <footer><span data-i18n="L / R = links / rechts im Programmbild.">L / R = left / right in the program image.</span></footer>
   </main>
   <dialog id="finish-dialog">
     <h2><span data-i18n="Spiel beenden?">Finish match?</span></h2>
@@ -29,13 +29,13 @@
   <dialog id="reopen-dialog">
     <h2><span data-i18n="Spiel wieder öffnen?">Reopen match?</span></h2>
     <p id="reopen-result"></p>
-    <p><span data-i18n="Das Spiel wird mit unverändertem Score, Seiten und Abschnitt fortgesetzt.">The match continues with unchanged score, sides and period.</span></p>
+    <p><span data-i18n="Die erfassten Werte, Seiten und der Abschnitt bleiben erhalten.">Recorded values, sides and period are preserved.</span></p>
     <button id="reopen-cancel"><span data-i18n="Zurück">Back</span></button>
     <button id="reopen-confirm" class="primary"><span data-i18n="Spiel wieder öffnen">Reopen match</span></button>
   </dialog>
   <dialog id="period-dialog">
     <h2 id="period-question"></h2>
-    <p><span data-i18n="Counter werden gemäß Sportprofil für den nächsten Abschnitt gesetzt. Bisherige Werte bleiben gespeichert. Score und Seiten bleiben erhalten.">Counters are set for the next period according to the sport profile. Previous values, scores and sides are preserved.</span></p>
+    <p><span data-i18n="Der nächste Abschnitt beginnt gemäß Sportprofil. Bisherige Werte und die Seitenzuordnung bleiben erhalten.">The next period starts according to the sport profile. Previous values and side assignments are preserved.</span></p>
     <button id="period-cancel"><span data-i18n="Zurück">Back</span></button>
     <button id="period-confirm" class="primary"><span data-i18n="Abschnitt starten">Start period</span></button>
   </dialog>
@@ -43,7 +43,7 @@
     <h2><span data-i18n="Dieses Spiel zurücksetzen?">Reset this match?</span></h2>
     <p id="reset-match"></p>
     <p id="reset-result"></p>
-    <p><span data-i18n="Score, Zähler und Abschnitt werden zurückgesetzt. Danach die Paarung prüfen oder korrigieren und das Spiel neu starten. Andere Spiele bleiben unverändert.">Scores, counters and period will be reset. Then check or correct the pairing and start the match again. Other matches remain unchanged.</span></p>
+    <p><span data-i18n="Alle erfassten Werte und der Abschnitt dieses Spiels werden zurückgesetzt. Danach die Paarung prüfen oder korrigieren und das Spiel neu starten. Andere Spiele bleiben unverändert.">All recorded values and the period of this match will be reset. Then check or correct the pairing and start the match again. Other matches remain unchanged.</span></p>
     <p><span data-i18n="Dieser Schritt kann nicht mit UNDO rückgängig gemacht werden.">This step cannot be reversed with UNDO.</span></p>
     <button id="reset-cancel"><span data-i18n="Zurück">Back</span></button>
     <button id="reset-confirm" class="danger"><span data-i18n="Spiel zurücksetzen">Reset match</span></button>

@@ -220,7 +220,7 @@ class AuthTest(unittest.TestCase):
                 self.assertEqual(self.client.post('/api/v1/live/score',json=dict(**body,side='L'),headers=self.headers()).status_code,200)
                 body['request_id']=str(uuid4())
                 self.assertEqual(self.client.post('/api/v1/live/counter',json=dict(**body,counter_id='team_fouls',period=1),headers=self.headers()).status_code,200)
-                self.action('switch-sides');self.action('pause');self.action('period',period=2);self.action('resume');self.action('finish')
+                self.action('switch-sides');self.action('intermission',intermission=True);self.action('period',period=2);self.action('finish')
                 exported=self.client.get('/api/v1/event-catalog/'+imported+'/export')
                 self.assertEqual(exported.status_code,200)
                 self.assertEqual(exported.json()['event']['name'],'Corrected name')

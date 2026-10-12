@@ -142,7 +142,7 @@ class CatalogTest(unittest.TestCase):
         self.action('prepare',participant_1='bsc-praha',participant_2='fc-ingolstadt-04',side_l='bsc-praha',side_r='fc-ingolstadt-04')
         self.select(a,409)  # ready
         self.action('start'); self.action('score'); self.select(a,409)
-        self.action('pause'); self.select(a,409)
+        self.select(a,409)
         self.action('finish'); self.select(a)
         self.assertEqual(self.snapshot()['matches'],[])
         self.select(b)
@@ -389,7 +389,7 @@ class CatalogTest(unittest.TestCase):
         self.action('prepare',participant_1='bsc-praha',participant_2='kairat-almaty',side_l='kairat-almaty',side_r='bsc-praha'); check()
         self.action('unprepare'); check()
         self.prepare(); check()
-        for operation in ('switch-sides','start','score','score','pause','switch-sides','resume','undo'):
+        for operation in ('switch-sides','start','score','score','switch-sides','undo'):
             self.action(operation); check()
         before = self.snapshot()['matches']
         self.client.__exit__(None,None,None); self.start()

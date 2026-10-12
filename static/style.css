@@ -350,3 +350,11 @@ header { flex-wrap: wrap; }
   .profile-languages { grid-template-columns: 1fr; }
   .profile-languages section { border-top: 1px solid #465d77; }
 }
+
+.participant-role, .sets { font-weight: 700; margin: .7rem 0; }
+.period-history { overflow-x: auto; margin-top: 1rem; }
+.period-history table { width: 100%; border-collapse: collapse; text-align: center; }
+.period-history th, .period-history td { padding: .5rem; border-bottom: 1px solid #465d77; }
+
+.sets-actions { display: flex; gap: .5rem; margin-top: .5rem; }
+.sets-actions button { flex: 1; min-width: 0; }

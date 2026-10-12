@@ -36,7 +36,7 @@ Im Checkout mit eingerichteter `.venv`:
 Die Tests prüfen unter anderem Speicherung und Wiederherstellung, erlaubte
 Spielaktionen, Score-Undo, die 2:1-Seitenwechsel-Invariante, Import/Export,
 Counter und Abschnitte, Auth, Request-Deduplizierung und API-Antworten.
-Der Dokumentations-Test vergleicht die vollständige Live-Antwort und den
+Dokumentationstests prüfen alle sechs vollständigen Live-Beispiele sowie den
 Score-Request aus `docs/API.md` mit echten API-Aufrufen.
 
 ## Browser- und Betriebsprüfungen
@@ -47,6 +47,7 @@ Score-Request aus `docs/API.md` mit echten API-Aufrufen.
 .venv/bin/python tests/browser_auth_smoke.py
 .venv/bin/python tests/browser_sections_smoke.py
 .venv/bin/python tests/browser_profiles_smoke.py
+.venv/bin/python tests/browser_standard_profiles_smoke.py
 .venv/bin/python tests/browser_reset_smoke.py
 .venv/bin/python tests/deployment_smoke.py
 .venv/bin/python tests/auth_recovery_smoke.py
@@ -61,7 +62,7 @@ Produktive Event-Dateien werden nicht verwendet.
 Browser-Smokes prüfen mobile Ansichten, mehrere Bediener, Offline/Reconnect,
 Imports, Endstandbestätigung, Sprachen und Zugriffsrechte. Deployment-Smokes
 erstellen echte venvs und prüfen Installation, das CLI-Upgrade von der veröffentlichten
-0.2.0 auf 0.2.1, Datenerhalt einschließlich Profilbibliothek und
+0.2.1 auf 0.2.2, wiederholte Upgrades, automatische Standardprofile und Datenerhalt sowie
 Deinstallation. Details zur [isolierten Verifikation](INSTALLATION.md#isolierte-verifikation).
 Der Recovery-Smoke prüft Passwortänderung mit echtem SIGHUP und weiterlaufenden
 Live-Daten; sein systemctl-Stub kontaktiert keine Hostdienste.
@@ -96,11 +97,17 @@ Spielen, Abschnittspausen, Dialogkonflikte, neue Paarung, Undo, Datenerhalt und 
 Die umgesetzte Entscheidung zu [Abschnittspausen und Wiederöffnen](issues/issue-remove-pause.md)
 beschreibt auch die Kompatibilitätsauswirkungen für ältere API-Clients.
 
-Verifikation von 0.2.1 unter Linux: **156 Unit-Tests bestanden**, einschließlich
-aller Einzelspielzustände, Undo-Grenzen, Export/Import, Persistenzfehler und
-konkurrierender Bediener. Browser-Smokes für Bedienung, Auth und die neue
-Einzelspielkorrektur bestanden; DE/EN/CS, zwei angemeldete Operatoren, Box-/Showdown-
-Profile und kein Profil wurden geprüft. Mobile Dialog-Screenshots wurden visuell
-geprüft. Das echte CLI-Upgrade von der veröffentlichten 0.2.0 auf 0.2.1 erhielt
-Konfiguration, Passwörter, Veranstaltungsdaten und Profilbibliothek unverändert.
+Verifikation von 0.2.2 unter Linux: **172 Unit-Tests bestanden**, darunter die sieben
+Standardprofile, Erfassungsmodi, getrennte Abschnittshistorien, manuelle Satzgewinne,
+Rollen, deaktivierte Funktionen, sechs dokumentierte API-Antworten und Neustart-/
+Veranstaltungswechsel. Browser-Smokes für Bedienung, Rechte, Profilverwaltung,
+Einzelspielkorrektur und alle Abschnittsvarianten in DE/EN/CS bestanden. Der neue
+Standardprofil-Smoke prüft alle sieben Vorlagen und die freie GUI-Pflege sämtlicher
+neuer Felder. Mobile Box-/Showdown- und Profilansichten wurden visuell geprüft.
+
+Das echte CLI-Upgrade von der veröffentlichten 0.2.1 auf 0.2.2, ein wiederholtes
+Upgrade und eine Neuinstallation wurden isoliert mit venv/PyPI geprüft.
+Veranstaltungs-, Konfigurations- und Auth-Dateien blieben bytegleich. Standardprofile
+wurden automatisch ergänzt; angepasste, eigene und bewusst gelöschte Bibliotheksprofile
+blieben erhalten. Fehler- und Rollback-Tests erhalten die vorherige Bibliothek.
 Native Windows- und Host-systemd-Prüfungen sind nicht Teil dieser Verifikation.

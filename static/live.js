@@ -1,4 +1,4 @@
-import { t, periodAction, periodReturn, profileText } from './i18n.js';
+import { t, periodAction, periodReturn, profileText, roleText, periodText } from './i18n.js';
 import { $, escape as e, Connection, message } from './common.js';
 let editPairing = false, showFinished = false, finishRevision = null, reopenRevision = null, periodRevision = null, resetRevision = null, selectionToken = null;
 const button = (action, label, cls = '', disabled = false) => `<button data-action="${action}" class="${cls}" data-disabled="${disabled}">${label}</button>`;
@@ -6,6 +6,13 @@ const app = new Connection(render);
 const name = (state, id, fallback = t('Noch offen')) => state.participants.find(p => p.id === id)?.name || t(fallback);
 function matchInfo(state, match) {
   return `${e(match.date)} · ${e(match.time.slice(0,5))} · ${e(state.play_areas.find(a => a.id === match.play_area_id)?.label)}${match.stage ? ' · ' + e(match.stage) : ''}${match.round ? ' · ' + e(match.round) : ''}`;
+}
+function resultText(state, match) {
+  const profile = state.live.sport_profile;
+  const left = match.side_l || match.participant_1, right = match.side_r || match.participant_2;
+  if (profile?.score_mode === 'none' && !profile.sets_enabled) return `${name(state,left)} – ${name(state,right)}`;
+  const values = profile?.sets_enabled ? match.sets_won : match.scores;
+  return `${name(state,left)} ${values[left] ?? '—'} : ${values[right] ?? '—'} ${name(state,right)}${profile?.sets_enabled ? ' · ' + profileText(profile,'sets_label') : ''}`;
 }
 function options(state, selected) {
   return `<option value="">${t("Bitte wählen")}</option>` + state.participants.map(p => `<option value="${e(p.id)}" ${p.id === selected ? 'selected' : ''}>${e(p.name)}</option>`).join('');
@@ -36,27 +43,35 @@ function render(state) {
     return;
   }
   if (match) {
-    const profile = state.live.sport_profile;
+    const profile = state.event?.sport_profile ? state.live.sport_profile : null;
     const section = profileText(profile, 'period_label');
     const pause = profileText(profile, 'break_label');
     const status = match.intermission ? pause : {scheduled:t('NÄCHSTES SPIEL'),ready:t('BEREIT'),live:t('LIVE'),finished:t('BEENDET')}[state.live.status];
-    html += `<div class="panel"><span class="status ${match.intermission ? 'intermission' : state.live.status}">${e(status)}</span><p class="muted">${matchInfo(state,match)}</p>`;
+    html += `<div class="panel"><span class="status ${match.intermission ? 'intermission' : state.live.status}">${e(status)}</span>${profile?.show_details === false ? '' : `<p class="muted">${matchInfo(state,match)}</p>`}`;
     if (profileText(profile,'hint')) html += `<p class="profile-hint muted">${e(profileText(profile,'hint'))}</p>`;
-    if (profile) html += `<p id="period-label">${match.period}. ${e(section)}${match.intermission ? ` · <strong id="intermission-label">${e(pause)}</strong>` : ''} · ${profile.periods} ${t("Abschnitte")}</p>`;
+    if (profile) html += `<p id="period-label">${e(periodText(match.period,section))}${match.intermission ? ` · <strong id="intermission-label">${e(pause)}</strong>` : ''} · ${profile.periods} ${t("Abschnitte")}</p>`;
     if (match.status === 'scheduled') {
       html += `<div class="pairing-names">${e(name(state,match.participant_1,match.placeholder_1))}<span>${t("gegen")}</span>${e(name(state,match.participant_2,match.placeholder_2))}</div>`;
       if (editPairing || !match.participant_1 || !match.participant_2) {
-        html += `<label for="pair-1">${t("Teilnehmer 1 / zunächst links")}</label><select id="pair-1">${options(state,match.participant_1)}</select><label for="pair-2">${t("Teilnehmer 2 / zunächst rechts")}</label><select id="pair-2">${options(state,match.participant_2)}</select>`;
+        html += `<label for="pair-1">${e(profile?.roles?.participant_1 ? roleText(profile.roles.participant_1) : t("Teilnehmer 1 / zunächst links"))}</label><select id="pair-1">${options(state,match.participant_1)}</select><label for="pair-2">${e(profile?.roles?.participant_2 ? roleText(profile.roles.participant_2) : t("Teilnehmer 2 / zunächst rechts"))}</label><select id="pair-2">${options(state,match.participant_2)}</select>`;
       }
       html += `<div class="stack">${button('prepare',t('Paarung bestätigen'),'primary')}${button('edit-pair',t('Paarung ändern'))}</div>`;
     } else {
-      html += `<p class="muted">${e(t(state.event?.score_label || 'Score'))}</p><div class="pair">`;
+      if (state.live.display.score) html += `<p class="muted">${e(profileText(profile,'score_label') || t(state.event?.score_label || 'Score'))}</p>`;
+      html += '<div class="pair">';
       for (const [side, key] of [['L','left'],['R','right']]) {
         const person = state.live[key];
         html += `<div><div class="side">${side === 'L' ? t('LINKS') : t('RECHTS')}</div><div class="name" id="name-${side}">${e(person.name)}</div>`;
-        if (match.status !== 'ready') html += `<div class="score" id="score-${side}" aria-label="${t('Score')} ${side}">${person.score}</div>`;
-        if (['live','paused'].includes(match.status)) html += button(`score-${side}-1`,'+1','add') + button(`score-${side}--1`,'−1','subtract',person.score === 0);
-        for (const counter of profile?.counters || []) {
+        if (person.role) html += `<p class="participant-role" id="role-${side}">${e(roleText(person.role))}</p>`;
+        if (state.live.display.score && match.status !== 'ready') html += `<div class="score" id="score-${side}" aria-label="${t('Score')} ${side}">${person.score}</div>`;
+        if (state.live.display.score && ['live','paused'].includes(match.status)) {
+          for (const step of profile?.score_steps || [1]) html += button(`score-${side}-${step}`,`+${step}`,'add') + button(`score-${side}--${step}`,`−${step}`,'subtract',person.score < step);
+        }
+        if (state.live.display.sets) {
+          html += `<div class="sets"><strong id="sets-${side}">${person.sets_won ?? '—'}</strong> ${e(profileText(profile,'sets_label'))}</div>`;
+          if (['live','paused'].includes(match.status)) html += `<div class="sets-actions">${button(`sets-${side}-1`,'+1')}${button(`sets-${side}--1`,'−1','subtract',!(person.sets_won>0))}</div>`;
+        }
+        for (const counter of (profile?.counters || []).filter(c => c.enabled)) {
           const value = person.counters[counter.id], level = person.counter_states[counter.id];
           const notice = level === 'critical' ? profileText(counter,'critical_label') : level === 'warning' ? profileText(counter,'warning_label') : '';
           html += `<div class="counter ${level}" id="counter-${side}-${e(counter.id)}"><strong><span class="counter-value">${value}</span> ${e(profileText(counter,'label'))}</strong>`;
@@ -69,7 +84,7 @@ function render(state) {
       html += '</div>';
       if (match.status === 'ready') html += `<div class="stack">${button('switch-sides',t('Seiten tauschen'))}${button('start',profile ? e(periodAction(1,section)) : t('Spiel starten'),'primary')}</div>`;
       if (['live','paused'].includes(match.status)) {
-        html += button('undo',t('UNDO · letzter Score'),'undo',!state.can_undo);
+        if (state.live.display.score || state.live.display.sets) html += button('undo',t('UNDO · letzte Punkte- / Satzaktion'),'undo',!state.can_undo);
         if (profile && match.intermission) html += `<div class="stack period-action">${button('period-dialog',e(periodAction(match.period+1,section)),'primary')}</div>`;
         html += '<div class="actions">';
         if (profile && match.period < profile.periods) html += button('intermission',e(match.intermission ? periodReturn(match.period,section) : pause));
@@ -78,7 +93,10 @@ function render(state) {
       if (match.status === 'finished') html += `<p>${t("Ergebnis bestätigt. Nächstes Spiel auswählen.")}</p>${button('reopen-dialog',t('Spiel wieder öffnen'))}`;
       html += `<div class="stack">${button('reset-dialog',t('Spiel zurücksetzen / Paarung korrigieren'))}</div>`;
     }
-    if (state.live.officials.length) html += `<p id="officials" class="muted officials">${t("Officials:")} ${state.live.officials.map(referee => e(referee.name) + (referee.country_code ? ' (' + e(referee.country_code) + ')' : '')).join(' · ')}</p>`;
+    if (profile?.show_officials !== false && state.live.officials.length) html += `<p id="officials" class="muted officials">${t("Officials:")} ${state.live.officials.map(referee => e(referee.name) + (referee.country_code ? ' (' + e(referee.country_code) + ')' : '')).join(' · ')}</p>`;
+    if (profile?.score_mode === 'period' && match.status !== 'scheduled') {
+      html += `<div class="period-history"><table><caption>${t('Abschnittspunkte')}</caption><thead><tr><th>${e(section)}</th><th>${e(name(state,match.participant_1))}</th><th>${e(name(state,match.participant_2))}</th></tr></thead><tbody>${Object.entries(match.period_scores).map(([number,values]) => `<tr><th>${number}</th><td>${values[match.participant_1]}</td><td>${values[match.participant_2]}</td></tr>`).join('')}</tbody></table></div>`;
+    }
     html += '</div>';
   }
   if (!match || ['scheduled','finished'].includes(match.status)) {
@@ -90,7 +108,7 @@ function render(state) {
     const finished = state.matches.filter(m => m.status === 'finished' && m.id !== match?.id).sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
     if (finished.length) {
       html += button('toggle-finished',`${showFinished ? t('Beendete Spiele ausblenden') : t('Beendete Spiele anzeigen')} (${finished.length})`);
-      if (showFinished) html += finished.map(m => `<button class="match-item" data-action="select" data-id="${e(m.id)}"><small>${matchInfo(state,m)} · ${t('BEENDET')}</small>${e(name(state,m.participant_1))} ${m.scores[m.participant_1]} : ${m.scores[m.participant_2]} ${e(name(state,m.participant_2))}</button>`).join('');
+      if (showFinished) html += finished.map(m => `<button class="match-item" data-action="select" data-id="${e(m.id)}"><small>${matchInfo(state,m)} · ${t('BEENDET')}</small>${e(resultText(state,m))}</button>`).join('');
     }
   }
   $('#live').innerHTML = html;
@@ -104,12 +122,12 @@ $('#live').addEventListener('click', async event => {
   if (action === 'toggle-finished') { showFinished = !showFinished; render(state); app.controls(); return; }
   if (action === 'finish-dialog') {
     finishRevision = state.revision;
-    $('#final-result').textContent = `${state.live.left.name} ${state.live.left.score} : ${state.live.right.score} ${state.live.right.name}`;
+    $('#final-result').textContent = resultText(state,match);
     $('#finish-dialog').showModal(); return;
   }
   if (action === 'reopen-dialog') {
     reopenRevision = state.revision;
-    $('#reopen-result').textContent = `${state.live.left.name} ${state.live.left.score} : ${state.live.right.score} ${state.live.right.name}`;
+    $('#reopen-result').textContent = resultText(state,match);
     $('#reopen-dialog').showModal(); return;
   }
   if (action === 'period-dialog') {
@@ -122,7 +140,7 @@ $('#live').addEventListener('click', async event => {
   if (action === 'reset-dialog') {
     resetRevision = state.revision;
     $('#reset-match').textContent = `${match.id} · ${match.date} · ${match.time.slice(0,5)} · ${state.live.play_area.label}`;
-    $('#reset-result').textContent = `${state.live.left.name} ${state.live.left.score} : ${state.live.right.score} ${state.live.right.name}`;
+    $('#reset-result').textContent = resultText(state,match);
     $('#reset-dialog').showModal(); return;
   }
   let payload = {match_id: action === 'select' ? target.dataset.id : match.id}, endpoint = action;
@@ -131,9 +149,9 @@ $('#live').addEventListener('click', async event => {
     if (!p1 || !p2 || p1 === p2) { message(t('Bitte zwei verschiedene Teilnehmer wählen.')); return; }
     Object.assign(payload, {participant_1:p1, participant_2:p2, side_l:p1, side_r:p2}); editPairing = false;
   }
-  if (action.startsWith('score-')) {
-    const [, side, delta] = action.match(/^score-([LR])-(-?1)$/);
-    Object.assign(payload, {side,delta:Number(delta),participant_id:state.live[side === 'L' ? 'left' : 'right'].id,control_revision:match.control_revision}); endpoint = 'score';
+  if (action.startsWith('score-') || action.startsWith('sets-')) {
+    const [, kind, side, delta] = action.match(/^(score|sets)-([LR])-(-?[0-9]+)$/);
+    Object.assign(payload, {side,delta:Number(delta),participant_id:state.live[side === 'L' ? 'left' : 'right'].id,control_revision:match.control_revision}); endpoint = kind;
   }
   if (action === 'counter') {
     Object.assign(payload, {participant_id:state.live[target.dataset.side === 'L' ? 'left' : 'right'].id,

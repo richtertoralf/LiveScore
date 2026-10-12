@@ -47,6 +47,7 @@ Score-Request aus `docs/API.md` mit echten API-Aufrufen.
 .venv/bin/python tests/browser_auth_smoke.py
 .venv/bin/python tests/browser_sections_smoke.py
 .venv/bin/python tests/browser_profiles_smoke.py
+.venv/bin/python tests/browser_reset_smoke.py
 .venv/bin/python tests/deployment_smoke.py
 .venv/bin/python tests/auth_recovery_smoke.py
 ```
@@ -60,7 +61,7 @@ Produktive Event-Dateien werden nicht verwendet.
 Browser-Smokes prüfen mobile Ansichten, mehrere Bediener, Offline/Reconnect,
 Imports, Endstandbestätigung, Sprachen und Zugriffsrechte. Deployment-Smokes
 erstellen echte venvs und prüfen Installation, das CLI-Upgrade von der veröffentlichten
-0.1.2 auf 0.2.0, Datenerhalt einschließlich Profilbibliothek und
+0.2.0 auf 0.2.1, Datenerhalt einschließlich Profilbibliothek und
 Deinstallation. Details zur [isolierten Verifikation](INSTALLATION.md#isolierte-verifikation).
 Der Recovery-Smoke prüft Passwortänderung mit echtem SIGHUP und weiterlaufenden
 Live-Daten; sein systemctl-Stub kontaktiert keine Hostdienste.
@@ -82,19 +83,24 @@ die bisher dokumentierten praktischen Prüfungen erfolgten unter Linux/Chromium.
 Die folgenden Dokumente beschreiben Entscheidungen beziehungsweise Vorschläge,
 keine zusätzlichen implementierten Funktionen:
 
-- [Einzelnes Spiel zurücksetzen und Paarung korrigieren](issues/issue-match-reset.md)
 - [Spieluhr: Entscheidung und Zukunftsthema](issues/issue-match-clock.md)
 
 Die [historische Referenzprüfung](REFERENZEN.md) dokumentiert Projektmuster und
 die damalige Portwahl; sie ist keine Betriebsvoraussetzung.
 
+Die umgesetzte [Einzelspielkorrektur](issues/issue-match-reset.md) ist mit
+`browser_reset_smoke.py` prüfbar: zwei echte Operator-Logins, DE/EN/CS, Box-/Showdown-
+Profile und kein Profil, Zurücksetzen von vorbereiteten, laufenden und beendeten
+Spielen, Abschnittspausen, Dialogkonflikte, neue Paarung, Undo, Datenerhalt und Neustart.
+
 Die umgesetzte Entscheidung zu [Abschnittspausen und Wiederöffnen](issues/issue-remove-pause.md)
 beschreibt auch die Kompatibilitätsauswirkungen für ältere API-Clients.
 
-Verifikation von 0.2.0 unter Linux: **151 Unit-Tests bestanden**, Browser-Smokes für
-Bedienung, Auth, neun Abschnittsprofile in EN/DE/CS und die vollständige Profilpflege
-mit zwei Admins und Operator. Ein zusätzlicher CS-Lauf prüfte die bereinigte
-Textdarstellung. Mobile und Desktop-Screenshots wurden visuell geprüft. Das echte
-CLI-Upgrade von 0.1.2 auf 0.2.0 erhielt Konfiguration, Passwörter, Veranstaltungsdaten
-und Profilbibliothek unverändert. Native Windows- und Host-systemd-Prüfungen sind
-nicht Teil dieser Verifikation.
+Verifikation von 0.2.1 unter Linux: **156 Unit-Tests bestanden**, einschließlich
+aller Einzelspielzustände, Undo-Grenzen, Export/Import, Persistenzfehler und
+konkurrierender Bediener. Browser-Smokes für Bedienung, Auth und die neue
+Einzelspielkorrektur bestanden; DE/EN/CS, zwei angemeldete Operatoren, Box-/Showdown-
+Profile und kein Profil wurden geprüft. Mobile Dialog-Screenshots wurden visuell
+geprüft. Das echte CLI-Upgrade von der veröffentlichten 0.2.0 auf 0.2.1 erhielt
+Konfiguration, Passwörter, Veranstaltungsdaten und Profilbibliothek unverändert.
+Native Windows- und Host-systemd-Prüfungen sind nicht Teil dieser Verifikation.

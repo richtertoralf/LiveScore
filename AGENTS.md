@@ -86,6 +86,8 @@ Sportartspezifische Regeln wie Sätze, Karten, Strafen, Torschützen, Tabellenbe
 - Kein allgemeiner Pause-/Fortsetzen-Button, keine Uhr, automatische Pausendauer oder automatischer Abschnittswechsel.
 - Der nächste Abschnitt wird in der GUI während der Abschnittspause nach Bestätigung gestartet; eine versehentliche Pause lässt sich ohne Abschnittswechsel aufheben.
 - Seitenwechsel ist unabhängig vom Abschnittswechsel. Score, Counter und Undo bleiben in der Abschnittspause bedienbar.
+- Operator und Admin können das ausgewählte vorbereitete, laufende oder beendete Spiel nach Bestätigung zurücksetzen und die Paarung erneut vorbereiten. Andere Spiele bleiben unverändert.
+- `match_reset` erhält das Protokoll und begrenzt Undo auf den neuen Spielversuch; Kontrollrevisionen werden nicht wiederverwendet.
 - Wiederöffnen eines versehentlich beendeten Wettkampfs führt direkt zu `live`, mit unveränderten Scores, Seiten, Abschnitt und Countern.
 
 ### Sportprofilverwaltung
@@ -95,7 +97,7 @@ Sportartspezifische Regeln wie Sätze, Karten, Strafen, Torschützen, Tabellenbe
 - Die unabhängige JSON-Profilbibliothek wird über die Weboberfläche verwaltet.
 - Eine Veranstaltung erhält eine vollständige Kopie; Bibliotheksänderungen verändern keine Veranstaltung.
 - Alle Profil- und Countertexte für DE/EN/CS stehen gemeinsam in `translations` desselben Profils und sind gemeinsam bearbeitbar.
-- Verwendete Abschnittsanzahl, Counter-IDs und Rücksetzverhalten bleiben fest; Texte und Anzeigegrenzen bleiben bearbeitbar.
+- Abschnittsanzahl, Counter-IDs und Rücksetzverhalten bleiben fest, solange Spiele vorbereitet oder gespielt sind; Texte und Anzeigegrenzen bleiben bearbeitbar. Nach ausdrücklichem Zurücksetzen aller Spiele ist die Struktur wieder frei.
 - Bestehende Prag-Dateien bleiben ladbar. Kein automatisches Umschreiben beim Lesen.
 - Die Live-API verwendet für alle Profile generische Abschnittscodes und aufgelöste Profiltexte.
 

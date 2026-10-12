@@ -163,6 +163,16 @@ class State(Model):
     active_match_id: ID | None = None
     events: list[ActionEvent] = Field(default_factory=list)
 
+    def score_events(self, match_id):
+        """Score-Aktionen des aktuellen Spielversuchs, neueste zuerst."""
+        for event in reversed(self.events):
+            if event.match_id != match_id:
+                continue
+            if event.type == "match_reset":
+                break
+            if event.type == "score":
+                yield event
+
     @model_validator(mode="after")
     def invariants(self):
         for items in (self.play_areas, self.participants, self.referees, self.matches):
@@ -220,8 +230,19 @@ class State(Model):
         if len({e.id for e in self.events}) != len(self.events) or len({e.request_id for e in self.events}) != len(self.events):
             raise ValueError("Ereignis- und Request-IDs müssen eindeutig sein.")
         undo_scores = {m.id: dict(m.scores) for m in self.matches}
+        reset_matches = set()
         for event in reversed(self.events):
+            if event.type == "match_reset":
+                if event.match_id not in undo_scores:
+                    raise ValueError("Reset-Ereignis benötigt ein gültiges Spiel.")
+                reset_matches.add(event.match_id)
             if event.type != "score":
+                continue
+            if (event.match_id not in undo_scores or event.participant_id not in people
+                    or event.delta not in (-1, 1)):
+                raise ValueError("Score-Ereignis benötigt gültiges Spiel, Teilnehmer und delta ±1.")
+            # Previous attempts remain auditable, but no longer describe current scores/pairing.
+            if event.match_id in reset_matches:
                 continue
             scores = undo_scores.get(event.match_id, {})
             if event.participant_id not in scores or event.delta not in (-1, 1):

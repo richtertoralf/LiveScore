@@ -1,6 +1,6 @@
 # Bedienung: Spiel zurücksetzen und Paarung nach Spielbeginn korrigieren
 
-> **Art:** Störungsbericht und Anforderung · **Status:** offen · **Priorität:** hoch
+> **Art:** Störungsbericht und Anforderung · **Status:** umgesetzt in 0.2.1 · **Priorität:** hoch
 >
 > Geprüfter Stand: LiveScore 0.1.2 (Produktivsystem `mediamtx18`, Prag 2026, 4. Oktober 2026).
 
@@ -43,22 +43,49 @@ Die Korrektur lief per SSH auf dem Server, mit zwei Dienstneustarts:
 
 Fehlerquellen dabei: ein Tippfehler im Dienstnamen (Dienst lief weiter), umbrochene Befehlszeilen beim Einfügen und ein `!` vor dem Befehl in der Shell. Die Sicherung liegt in `events/prague-2026.json.bak-gold`. `prague-2026-2` enthält weiterhin den fehlerhaften Stand und sollte nicht mehr ausgewählt werden.
 
-## Lösungsvorschlag (noch nicht umgesetzt)
+## Umgesetzte Lösung
 
-Eine Aktion **„Spiel zurücksetzen“** für das ausgewählte Spiel, für Operator und Admin:
+**Spiel zurücksetzen / Paarung korrigieren** ist die einheitliche Korrekturaktion für
+Operator und Admin aus `ready`, `live`, Legacy-`paused` und `finished`. Sie ersetzt
+in der GUI auch das bisherige Zurücknehmen der Vorbereitung. Die vorhandene API
+`unprepare` bleibt für vorbereitete Spiele verfügbar. Wiederöffnen dient weiterhin
+der Fortführung mit erhaltenen Daten und führt seit Issue #5 direkt zu `live`.
 
-- erlaubt aus `ready`, `live`, `paused` und `finished`;
-- setzt das Spiel auf `scheduled` zurück: Seiten und Scores leer, Teamfouls leer, Abschnitt 1, keine Halbzeitpause;
-- behält die Planfelder (Paarung oder Platzhalter, Officials, Zeit, Play Area), sodass der Bediener danach wie gewohnt die Paarung bestätigt oder korrigiert und L/R festlegt;
-- markiert die bisherigen Score-Ereignisse des Spiels so, dass Undo sie nicht mehr erreicht, und protokolliert ein Ereignis `match_reset`; das Protokoll bleibt nachvollziehbar;
-- ist als kritische Aktion durch einen Bestätigungsdialog geschützt, mit Nennung von Spiel und aktuellem Score;
-- lässt alle anderen Spiele unverändert.
+Ein Bestätigungsdialog zeigt Spiel, Termin, Play Area, Paarung und Score sowie die
+Folgen und die fehlende Undo-Möglichkeit. Das ausgewählte Spiel kehrt nach
+`scheduled` zurück: Seiten, Scores und alle Counterhistorien leer, Abschnitt 1,
+keine Abschnittspause. Planfelder einschließlich Paarung und Officials bleiben
+stehen. Anschließend folgt die vorhandene Paarungsauswahl und Vorbereitung.
+Andere Spiele, Ergebnisse und Veranstaltungsdaten bleiben unverändert.
 
-Damit wären Ursachen 1 bis 4 für den Bediener gelöst. Für Ursache 5 genügt vorerst ein deutlicher Hinweis auf die aktive Veranstaltung in `/events`. Löschen von Veranstaltungen ist ein eigener Auftrag.
+`POST /api/v1/live/reset` nutzt vorhandene Kontext-, Revisions- und Request-ID-Prüfungen.
+Konkurrierende Änderungen verlangen eine erneute Bestätigung; verspätete Score-/Counter-
+Requests bleiben auch nach erneutem Start und Spielplanbearbeitung ungültig.
+Die Kontrollrevision wird dabei niemals zurückgesetzt. Speicherung und Browserausgabe
+erfolgen über die vorhandene atomare Persistenz und WebSocket-Verteilung.
 
-Vor der Umsetzung zu klären:
+Das Protokoll wird nicht gelöscht: `match_reset` grenzt den neuen Spielversuch ab.
+Undo erreicht keine Score-Aktion vor dieser Grenze, auch nach Paarungsänderung,
+Export/Import und Neustart. Frühere Ereignisse behalten ihre ursprünglichen
+Undo-Markierungen. Keine neuen Modellfelder, Sportregeln oder Pausenfunktionen.
 
-- Reicht diese eine Aktion, oder soll bei `ready`/`live` zusätzlich „Paarung ändern“ direkt angeboten werden? Empfehlung: nur „Spiel zurücksetzen“, denn danach folgt der normale Ablauf.
-- Erhält die öffentliche API dabei einen sichtbaren Zwischenzustand? Nach dem Zurücksetzen liefert `GET /api/v1/live` `scheduled` ohne Teilnehmer, wie vor jedem Spiel.
+Bedienung: [Operator-Dokumentation](../OPERATOR.md#einzelnes-spiel-korrigieren).
+Vertrag und Kompatibilität: [API](../API.md#einzelnes-spiel-zurücksetzen-issue-4).
+Die aktive Veranstaltung ist bereits in der Navigation sichtbar. Das Löschen von
+Veranstaltungen bleibt außerhalb dieses Auftrags. Die oben beschriebene Notkorrektur
+ist ein historischer Einsatzbericht, keine aktuelle Betriebsanleitung.
 
-Tests mindestens: Zurücksetzen aus jedem erlaubten Zustand, kein Einfluss auf andere Spiele, Undo nach dem Zurücksetzen erreicht keine alten Scores, erneutes `prepare` mit anderer Paarung, Wiederherstellung nach Neustart, `GET /api/v1/live` danach.
+## Verifikation
+
+Automatisierte API-Tests prüfen alle erlaubten Zustände, Isolation anderer Ergebnisse
+und Planfelder, Score-Undo über mehrere Spielversuche, neue Paarungen, Eventvalidierung,
+Export/Import, Neustart, Request-Deduplizierung, veraltete Bestätigungen, konkurrierende
+Operatoren, WebSocket-Ausgabe, Schreibfehler sowie Operator-, CSRF- und Login-Rechte.
+Der Browsertest `tests/browser_reset_smoke.py` prüft zwei Operator-Logins in DE/EN/CS,
+Box-/Showdown-Profile und kein Profil, mobile und Desktop-Ansichten, Dialogabbruch,
+Konflikte, Abschnittspausen, Paarungskorrektur und Wiederherstellung.
+
+Ergebnis für 0.2.1: **156 Unit-Tests bestanden**, neuer Korrektur-Browsertest sowie
+bestehende Bedienungs- und Auth-Browsertests bestanden. JSON-Beispiele und API-Beispiele
+wurden validiert. Das echte CLI-Upgrade von der veröffentlichten 0.2.0 auf 0.2.1
+bestand mit unveränderten Veranstaltungsdaten, Profilbibliothek und Zugangsdaten.

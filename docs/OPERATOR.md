@@ -69,7 +69,9 @@ Zähler-IDs und Rücksetzverhalten fest: dieselbe Definition wird für vorhanden
 und deren Historien verwendet. Bezeichnungen, Hinweise und Anzeigegrenzen
 bleiben bearbeitbar; neue Anzeigegrenzen gelten auch für bereits erfasste Werte.
 Die Bibliotheksvorlage lässt sich jederzeit vollständig ändern. Für eine andere
-Wettkampfstruktur eine neue Veranstaltung verwenden.
+Wettkampfstruktur eine neue Veranstaltung verwenden. Sind ausdrücklich alle Spiele
+zurückgesetzt und wieder geplant, ist die Struktur erneut bearbeitbar; frühere
+Ereignisse bleiben ausschließlich als Protokoll alter Spielversuche erhalten.
 
 Ein offenes Formular wird bei Änderungen durch andere Admins nicht still überschrieben.
 Nach einem Speicherkonflikt **Gespeicherten Stand laden**, prüfen und erneut bearbeiten.
@@ -102,9 +104,29 @@ Score, Seiten, Abschnitt und Zähler bleiben erhalten; der Wettkampf ist sofort
 wieder **LIVE** und bedienbar. Eine zuvor gesetzte Abschnittspause wurde durch das
 Spielende beendet und muss gegebenenfalls erneut gesetzt werden.
 
-Die Paarung lässt sich nach Spielbeginn nicht mehr ändern. Wiederöffnen hebt diese
-Sperre nicht auf. Ein Zurücksetzen einzelner Spiele ist noch nicht implementiert;
-das Zurücksetzen einer ganzen Veranstaltung ist dafür kein geeigneter Ersatz.
+## Einzelnes Spiel korrigieren
+
+Bei falscher Paarung oder einem versehentlichen Start **Spiel zurücksetzen / Paarung
+korrigieren** wählen. Dieselbe Aktion steht bei vorbereiteten, laufenden und beendeten
+Spielen bereit und ist auch für Operatoren verfügbar. Für ein früheres Ergebnis zuerst
+**Beendete Spiele anzeigen** und das betreffende Spiel auswählen. Dafür darf kein
+anderes Spiel vorbereitet oder laufend sein.
+
+Der Dialog nennt Spiel, Termin, Play Area, Paarung und aktuellen Score. **Spiel
+zurücksetzen** leert ausschließlich dessen Scores, Seiten und sämtliche Zählerwerte;
+der Abschnitt beginnt wieder bei 1, ohne Abschnittspause. Dieser Schritt ist nicht
+mit Undo rückgängig zu machen. Bei einer zwischenzeitlichen Änderung durch einen
+anderen Bediener schließt sich der Dialog; den aktuellen Stand erneut prüfen.
+
+Danach erscheint die normale Paarungsauswahl: zwei Teilnehmer prüfen oder korrigieren,
+**Paarung bestätigen**, L/R festlegen und erneut starten. Zeit, Play Area, Platzhalter,
+Turnierphase und Officials bleiben erhalten. Alle anderen Spiele, Ergebnisse und
+Veranstaltungsdaten bleiben unverändert.
+
+Frühere Bedienereignisse bleiben im Export nachvollziehbar. Undo berücksichtigt
+nur Score-Aktionen seit dem letzten Zurücksetzen dieses Spiels. Soll lediglich ein
+versehentlich bestätigtes Ergebnis weiterbearbeitet werden, **Spiel wieder öffnen**
+nutzen: dabei bleiben die Wettkampfdaten erhalten.
 
 ## Wettkampfabschnitte, Pausen und Zähler
 

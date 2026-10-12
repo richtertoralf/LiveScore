@@ -248,7 +248,7 @@ def create_app(data_file: Path | None = None, *, data_dir: Path | None = None, a
     async def intermission(command: Intermission):
         return await app.state.service.apply("intermission", command)
 
-    for operation in ("select", "unprepare", "start", "pause", "resume", "switch-sides", "undo", "finish", "reopen"):
+    for operation in ("select", "unprepare", "start", "pause", "resume", "switch-sides", "undo", "finish", "reopen", "reset"):
         add_action(operation)
 
     @app.websocket("/api/v1/ws")

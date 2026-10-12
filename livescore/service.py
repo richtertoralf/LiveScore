@@ -120,7 +120,7 @@ def snapshot(state):
     data["live"] = live_view(state)
     match = current_match(state)
     data["can_undo"] = bool(match and match.status in ("live", "paused") and any(
-        e.type == "score" and e.match_id == match.id and not e.undone for e in state.events))
+        not e.undone for e in state.score_events(match.id)))
     return data
 
 
@@ -245,6 +245,9 @@ class Service:
                         if old and key not in item.model_fields_set:
                             setattr(item, key, getattr(old, key))
                     item = Match(**item.model_dump())
+                    if old:
+                        # Never reuse a control token after resetting/editing the same match.
+                        item.control_revision = old.control_revision
                     initialize_period(item, state.event.sport_profile if state.event else None)
                 if old:
                     collection[collection.index(old)] = item
@@ -271,6 +274,7 @@ class Service:
             "switch-sides": {"ready", "live", "paused"},
             "undo": {"live", "paused"}, "finish": {"live", "paused"},
             "reopen": {"finished"},
+            "reset": {"ready", "live", "paused", "finished"},
         }
         if match.status not in allowed[operation]:
             raise Conflict("Diese Aktion ist im aktuellen Spielzustand nicht erlaubt.")
@@ -284,10 +288,15 @@ class Service:
             match.counters = {}
             initialize_period(match, state.event.sport_profile)
             match.status = "ready"
-        elif operation == "unprepare":
+        elif operation in ("unprepare", "reset"):
             match.status = "scheduled"
             match.side_l = match.side_r = None
             match.scores = {}
+            match.counters = {}
+            match.period = 1
+            match.intermission = False
+            if operation == "reset":
+                event["type"] = "match_reset"
         elif operation == "start":
             match.status = "live"
             event["type"] = "match_started"
@@ -341,8 +350,7 @@ class Service:
             match.side_l, match.side_r = match.side_r, match.side_l
             event["type"] = "side_switch"
         elif operation == "undo":
-            last = next((e for e in reversed(state.events)
-                         if e.match_id == match.id and e.type == "score" and not e.undone), None)
+            last = next((e for e in state.score_events(match.id) if not e.undone), None)
             if last is None:
                 raise Conflict("Keine Score-Aktion zum Zurücknehmen vorhanden.")
             match.scores[last.participant_id] -= last.delta

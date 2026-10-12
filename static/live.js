@@ -1,6 +1,6 @@
 import { t, periodAction, periodReturn, profileText } from './i18n.js';
 import { $, escape as e, Connection, message } from './common.js';
-let editPairing = false, showFinished = false, finishRevision = null, reopenRevision = null, periodRevision = null, selectionToken = null;
+let editPairing = false, showFinished = false, finishRevision = null, reopenRevision = null, periodRevision = null, resetRevision = null, selectionToken = null;
 const button = (action, label, cls = '', disabled = false) => `<button data-action="${action}" class="${cls}" data-disabled="${disabled}">${label}</button>`;
 const app = new Connection(render);
 const name = (state, id, fallback = t('Noch offen')) => state.participants.find(p => p.id === id)?.name || t(fallback);
@@ -13,7 +13,7 @@ function options(state, selected) {
 function render(state) {
   if (selectionToken !== state.selection_token) {
     editPairing = false; selectionToken = state.selection_token;
-    $('#finish-dialog').close(); $('#reopen-dialog').close(); $('#period-dialog').close();
+    $('#finish-dialog').close(); $('#reopen-dialog').close(); $('#period-dialog').close(); $('#reset-dialog').close();
   }
   $('#event-name').textContent = state.event?.name || t('Veranstaltung noch nicht eingerichtet');
   const match = state.matches.find(m => m.id === state.active_match_id);
@@ -26,6 +26,9 @@ function render(state) {
   }
   if ($('#period-dialog').open && state.revision !== periodRevision) {
     $('#period-dialog').close(); message(t('Spielzustand wurde geändert. Bitte Abschnittswechsel erneut prüfen.'));
+  }
+  if ($('#reset-dialog').open && state.revision !== resetRevision) {
+    $('#reset-dialog').close(); message(t('Spielzustand wurde geändert. Bitte Zurücksetzen erneut prüfen.'));
   }
   let html = '';
   if (!state.active_event_id) {
@@ -64,7 +67,7 @@ function render(state) {
         html += '</div>';
       }
       html += '</div>';
-      if (match.status === 'ready') html += `<div class="stack">${button('switch-sides',t('Seiten tauschen'))}${button('start',profile ? e(periodAction(1,section)) : t('Spiel starten'),'primary')}${button('unprepare',t('Paarung ändern / Vorbereitung zurücknehmen'))}</div>`;
+      if (match.status === 'ready') html += `<div class="stack">${button('switch-sides',t('Seiten tauschen'))}${button('start',profile ? e(periodAction(1,section)) : t('Spiel starten'),'primary')}</div>`;
       if (['live','paused'].includes(match.status)) {
         html += button('undo',t('UNDO · letzter Score'),'undo',!state.can_undo);
         if (profile && match.intermission) html += `<div class="stack period-action">${button('period-dialog',e(periodAction(match.period+1,section)),'primary')}</div>`;
@@ -73,6 +76,7 @@ function render(state) {
         html += button('switch-sides',t('Seitenwechsel')) + '</div>' + button('finish-dialog',t('Spiel Ende'),'danger');
       }
       if (match.status === 'finished') html += `<p>${t("Ergebnis bestätigt. Nächstes Spiel auswählen.")}</p>${button('reopen-dialog',t('Spiel wieder öffnen'))}`;
+      html += `<div class="stack">${button('reset-dialog',t('Spiel zurücksetzen / Paarung korrigieren'))}</div>`;
     }
     if (state.live.officials.length) html += `<p id="officials" class="muted officials">${t("Officials:")} ${state.live.officials.map(referee => e(referee.name) + (referee.country_code ? ' (' + e(referee.country_code) + ')' : '')).join(' · ')}</p>`;
     html += '</div>';
@@ -115,6 +119,12 @@ $('#live').addEventListener('click', async event => {
     $('#period-confirm').textContent = label;
     $('#period-dialog').showModal(); return;
   }
+  if (action === 'reset-dialog') {
+    resetRevision = state.revision;
+    $('#reset-match').textContent = `${match.id} · ${match.date} · ${match.time.slice(0,5)} · ${state.live.play_area.label}`;
+    $('#reset-result').textContent = `${state.live.left.name} ${state.live.left.score} : ${state.live.right.score} ${state.live.right.name}`;
+    $('#reset-dialog').showModal(); return;
+  }
   let payload = {match_id: action === 'select' ? target.dataset.id : match.id}, endpoint = action;
   if (action === 'prepare') {
     const p1 = $('#pair-1')?.value ?? match.participant_1, p2 = $('#pair-2')?.value ?? match.participant_2;
@@ -151,4 +161,11 @@ $('#period-confirm').onclick = async () => {
   const revision = periodRevision;
   $('#period-dialog').close();
   await app.send('live/period',{match_id:app.state.active_match_id, period:app.state.live.period+1},revision);
+};
+$('#reset-cancel').onclick = () => $('#reset-dialog').close();
+$('#reset-confirm').onclick = async () => {
+  const revision = resetRevision;
+  $('#reset-dialog').close();
+  const result = await app.send('live/reset',{match_id:app.state.active_match_id},revision);
+  if (result) { editPairing = true; render(app.state); app.controls(); }
 };

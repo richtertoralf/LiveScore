@@ -67,6 +67,25 @@ class AuthTest(unittest.TestCase):
         self.assertEqual(response.status_code,200,response.text)
         return response.json()
 
+    def test_operator_can_reset_live_and_finished_match_with_csrf(self):
+        self.login('operator')
+        self.action('select')
+        self.action('prepare', participant_1='bsc-praha', participant_2='fc-ingolstadt-04',
+                    side_l='bsc-praha', side_r='fc-ingolstadt-04')
+        self.action('start')
+        state = self.client.get('/api/v1/tournament').json()
+        payload = dict(request_id=str(uuid4()), expected_revision=state['revision'],
+            event_id=state['active_event_id'], selection_token=state['selection_token'], match_id='match-001')
+        self.assertEqual(self.client.post('/api/v1/live/reset', json=payload).status_code, 403)
+        self.assertEqual(self.client.get('/api/v1/tournament').json(), state)
+        self.assertEqual(self.action('reset')['live']['status'], 'scheduled')
+        self.action('prepare', participant_1='kairat-almaty', participant_2='fc-ingolstadt-04',
+                    side_l='kairat-almaty', side_r='fc-ingolstadt-04')
+        self.action('start'); self.action('finish')
+        self.assertEqual(self.action('reset')['live']['status'], 'scheduled')
+        self.client.cookies.clear()
+        self.assertEqual(self.client.post('/api/v1/live/reset', json=payload).status_code, 401)
+
     def test_first_start_creates_only_two_hashed_users(self):
         self.client.__exit__(None,None,None)
         del self.client

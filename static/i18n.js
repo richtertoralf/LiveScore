@@ -1,5 +1,11 @@
 export const translations = {
   "en": {
+    "Dieses Spiel zurücksetzen?": "Reset this match?",
+    "Spiel zurücksetzen / Paarung korrigieren": "Reset match / Correct pairing",
+    "Spiel zurücksetzen": "Reset match",
+    "Score, Zähler und Abschnitt werden zurückgesetzt. Danach die Paarung prüfen oder korrigieren und das Spiel neu starten. Andere Spiele bleiben unverändert.": "Scores, counters and period will be reset. Then check or correct the pairing and start the match again. Other matches remain unchanged.",
+    "Dieser Schritt kann nicht mit UNDO rückgängig gemacht werden.": "This step cannot be reversed with UNDO.",
+    "Spielzustand wurde geändert. Bitte Zurücksetzen erneut prüfen.": "The match state changed. Please review the reset again.",
     "Sportprofile": "Sport profiles",
     "Profil auswählen": "Select profile",
     "Profil dieser Veranstaltung": "This event’s profile",
@@ -287,6 +293,12 @@ export const translations = {
     "next_period": "Start {label} {period}"
   },
   "de": {
+    "Dieses Spiel zurücksetzen?": "Dieses Spiel zurücksetzen?",
+    "Spiel zurücksetzen / Paarung korrigieren": "Spiel zurücksetzen / Paarung korrigieren",
+    "Spiel zurücksetzen": "Spiel zurücksetzen",
+    "Score, Zähler und Abschnitt werden zurückgesetzt. Danach die Paarung prüfen oder korrigieren und das Spiel neu starten. Andere Spiele bleiben unverändert.": "Score, Zähler und Abschnitt werden zurückgesetzt. Danach die Paarung prüfen oder korrigieren und das Spiel neu starten. Andere Spiele bleiben unverändert.",
+    "Dieser Schritt kann nicht mit UNDO rückgängig gemacht werden.": "Dieser Schritt kann nicht mit UNDO rückgängig gemacht werden.",
+    "Spielzustand wurde geändert. Bitte Zurücksetzen erneut prüfen.": "Spielzustand wurde geändert. Bitte Zurücksetzen erneut prüfen.",
     "Sportprofile": "Sportprofile",
     "Profil auswählen": "Profil auswählen",
     "Profil dieser Veranstaltung": "Profil dieser Veranstaltung",
@@ -574,6 +586,12 @@ export const translations = {
     "next_period": "{period}. {label} starten"
   },
   "cs": {
+    "Dieses Spiel zurücksetzen?": "Resetovat tento zápas?",
+    "Spiel zurücksetzen / Paarung korrigieren": "Resetovat zápas / Opravit dvojici",
+    "Spiel zurücksetzen": "Resetovat zápas",
+    "Score, Zähler und Abschnitt werden zurückgesetzt. Danach die Paarung prüfen oder korrigieren und das Spiel neu starten. Andere Spiele bleiben unverändert.": "Skóre, počítadla a část se resetují. Poté zkontrolujte nebo opravte dvojici a spusťte zápas znovu. Ostatní zápasy zůstanou beze změny.",
+    "Dieser Schritt kann nicht mit UNDO rückgängig gemacht werden.": "Tento krok nelze vrátit pomocí UNDO.",
+    "Spielzustand wurde geändert. Bitte Zurücksetzen erneut prüfen.": "Stav zápasu se změnil. Znovu zkontrolujte resetování.",
     "Sportprofile": "Sportovní profily",
     "Profil auswählen": "Vybrat profil",
     "Profil dieser Veranstaltung": "Profil této události",

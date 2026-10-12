@@ -34,10 +34,10 @@ def run(remote_upgrade=False):
         data=root/'var/lib/livescore/data'
         log=(ARTIFACTS/'deployment-smoke.log').open('w')
         process=None
-        # A real published 0.1.2 runtime, not just a renamed version of the new code.
+        # A real published 0.2.0 runtime, not just a renamed version of the new code.
         initial_source=root/'initial-source'
         initial_source.mkdir()
-        archive=subprocess.check_output(['git','archive','34643e5348aa386c9b65406741a1cc54f37a4e97'],cwd=ROOT)
+        archive=subprocess.check_output(['git','archive','291c7be60989d4e0fe59c807ca2629b02426f11e'],cwd=ROOT)
         with tarfile.open(fileobj=io.BytesIO(archive)) as contents:
             contents.extractall(initial_source,filter='data')
         def command(*args, check=True):
@@ -66,10 +66,10 @@ def run(remote_upgrade=False):
             return {'X-CSRF-Token':client.get('/api/auth/session').json()['csrf_token']}
         try:
             command(initial_source/'install.sh','--staging-root',root)
-            assert subprocess.check_output([cli,'--version'],text=True)=='LiveScore 0.1.2\n'
-            assert subprocess.check_output([runtime/'.venv/bin/python','-m','livescore','--version'],cwd=runtime,text=True)=='LiveScore 0.1.2\n'
+            assert subprocess.check_output([cli,'--version'],text=True)=='LiveScore 0.2.0\n'
+            assert subprocess.check_output([runtime/'.venv/bin/python','-m','livescore','--version'],cwd=runtime,text=True)=='LiveScore 0.2.0\n'
             config.write_text(config.read_text().replace('0.0.0.0','127.0.0.1').replace('8730',str(port)))
-            process=start('0.1.2')
+            process=start('0.2.0')
             with httpx.Client(base_url=url) as client:
                 headers=login(client,'admin','admin')
                 response=client.post('/api/auth/password',json={'username':'admin','password':PASSWORD,'repeat':PASSWORD},headers=headers)
@@ -105,8 +105,8 @@ def run(remote_upgrade=False):
                 command(cli,'--upgrade','--source',ROOT)
             assert runtime.resolve()!=old and old.exists()
             assert snapshot()==before
-            assert subprocess.check_output([cli,'--version'],text=True)=='LiveScore 0.2.0\n'
-            process=start('0.2.0')
+            assert subprocess.check_output([cli,'--version'],text=True)=='LiveScore 0.2.1\n'
+            process=start('0.2.1')
             with httpx.Client(base_url=url) as client:
                 login(client,'admin',PASSWORD)
                 assert client.get('/api/v1/sport-profiles').json()['profiles'][0]['id']=='prague'
@@ -122,7 +122,7 @@ def run(remote_upgrade=False):
             assert snapshot()==before and not cli.exists() and not runtime.exists()
             command(ROOT/'uninstall.sh','--staging-root',root,'--purge')
             assert not data.exists() and not config.exists()
-            print('PASS: published 0.1.2 install and real CLI upgrade to 0.2.0; venv/pip; profile library and event data preserved byte-for-byte; active Prague (14/6/6); config/auth/live score/fouls/officials; restart; repeated install refuses; uninstall retains data; explicit purge.')
+            print('PASS: published 0.2.0 install and real CLI upgrade to 0.2.1; venv/pip; profile library and event data preserved byte-for-byte; active Prague (14/6/6); config/auth/live score/fouls/officials; restart; repeated install refuses; uninstall retains data; explicit purge.')
         finally:
             if process and process.poll() is None:process.terminate();process.wait(timeout=10)
             log.close()

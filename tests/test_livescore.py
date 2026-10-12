@@ -188,6 +188,165 @@ class APITest(unittest.TestCase):
         self.action('start',match_id='m2')
         self.assertEqual(self.request('live/select',match_id='m1').status_code,409)
 
+    def test_reset_all_states_preserves_plan_other_matches_and_audit(self):
+        self.configure('event', dict(name='Test', date_from='2026-10-03', date_to='2026-10-04',
+            sport_profile=dict(periods=3, period_label='Runde', counters=[dict(id='count', label='Counter')])))
+        self.configure('referees', dict(id='ref', name='Referee'))
+        self.configure('matches', dict(id='m1', date='2026-10-03', time='09:30', play_area_id='area',
+            participant_1='a', participant_2='b', placeholder_1='Finalist 1', placeholder_2='Finalist 2',
+            stage='Finale', stage_label='Final', round='Runde A', round_label='Round A', officials=['ref']))
+        self.action('select', match_id='m2')
+        self.action('prepare', match_id='m2', participant_1='a', participant_2='b', side_l='a', side_r='b')
+        self.action('start', match_id='m2'); self.score(); self.action('finish', match_id='m2')
+        other = self.state()['matches'][1]
+        self.action('select')
+        for status in ('ready', 'live', 'paused', 'finished'):
+            with self.subTest(status=status):
+                self.action('prepare', participant_1='a', participant_2='b', side_l='a', side_r='b')
+                if status != 'ready':
+                    self.action('start'); self.score(); self.score('R'); self.action('undo')
+                    match = self.state()['matches'][0]
+                    self.client.post('/api/v1/live/counter', json=dict(request_id=str(uuid4()),
+                        **self.context(), match_id='m1', counter_id='count', participant_id='a', delta=1,
+                        control_revision=match['control_revision'], period=1)).raise_for_status()
+                    self.action('period', period=2)
+                    self.action('intermission', intermission=True)
+                    self.action('switch-sides')
+                if status == 'paused': self.action('pause')
+                if status == 'finished': self.action('finish')
+                before = self.state()
+                events = self.client.get('/api/v1/events').json()
+                after = self.action('reset')
+                reset = after['matches'][0]
+                self.assertEqual(reset['status'], 'scheduled')
+                self.assertEqual((reset['side_l'], reset['side_r'], reset['scores'], reset['counters']),
+                                 (None, None, {}, {}))
+                self.assertEqual((reset['period'], reset['intermission']), (1, False))
+                self.assertGreater(reset['control_revision'], before['matches'][0]['control_revision'])
+                live_fields = {'status', 'side_l', 'side_r', 'scores', 'counters', 'period', 'intermission', 'control_revision'}
+                self.assertEqual({k:v for k,v in reset.items() if k not in live_fields},
+                                 {k:v for k,v in before['matches'][0].items() if k not in live_fields})
+                for key in ('event', 'participants', 'referees', 'play_areas', 'active_match_id'):
+                    self.assertEqual(after[key], before[key])
+                self.assertEqual(after['matches'][1], other)
+                self.assertEqual(self.client.get('/api/v1/events').json()[:-1], events)
+                self.assertEqual(self.client.get('/api/v1/events').json()[-1]['type'], 'match_reset')
+                public = self.client.get('/api/v1/live').json()
+                self.assertEqual((public['status'], public['left'], public['right']), ('scheduled', None, None))
+                self.assertEqual(public['period_info']['code'], 'not_started')
+                self.assertFalse(after['can_undo'])
+                self.assertEqual(load(self.path).model_dump(mode='json'),
+                                 self.app.state.service.state.model_dump(mode='json'))
+
+    def test_reset_new_pair_undo_restart_export_and_old_request_deduplication(self):
+        self.start()
+        old_score = self.score_payload()
+        self.client.post('/api/v1/live/score', json=old_score).raise_for_status()
+        self.score(); self.action('finish'); self.action('reset')
+        # A configuration correction must not reuse an earlier control_revision.
+        self.configure('matches', dict(id='m1', date='2026-10-03', time='10:30', play_area_id='area',
+            participant_1='a', participant_2='b'))
+        self.action('prepare', participant_1='a', participant_2='b', side_l='a', side_r='b')
+        self.action('start')
+        delayed = dict(old_score, request_id=str(uuid4()))
+        self.assertEqual(self.client.post('/api/v1/live/score', json=delayed).status_code, 409)
+        self.action('reset')
+        self.action('prepare', participant_1='c', participant_2='b', side_l='b', side_r='c')
+        self.action('start')
+        self.assertFalse(self.state()['can_undo'])
+        self.assertEqual(self.request('live/undo', match_id='m1').status_code, 409)
+        self.score('R'); self.score('R'); self.score('L'); self.score('L', -1)
+        self.action('undo')
+        self.assertEqual(self.state()['matches'][0]['scores'], {'c':2, 'b':1})
+        self.client.__exit__(None,None,None)
+        self.app = create_app(auth_config=AuthConfig(enabled=False), data_file=self.legacy_path)
+        self.client = TestClient(self.app).__enter__()
+        self.assertTrue(self.state()['can_undo'])
+        self.client.post('/api/v1/live/score', json=old_score).raise_for_status()
+        self.assertEqual(self.state()['matches'][0]['scores'], {'c':2, 'b':1})
+        self.action('switch-sides'); self.action('undo'); self.action('undo'); self.action('undo')
+        self.assertEqual(self.state()['matches'][0]['scores'], {'c':0, 'b':0})
+        self.assertFalse(self.state()['can_undo'])
+        self.assertEqual(self.request('live/undo', match_id='m1').status_code, 409)
+        exported = self.client.get('/api/v1/event-catalog/' + self.state()['active_event_id'] + '/export')
+        archive = State.model_validate_json(exported.text)
+        self.assertEqual(len([e for e in archive.events if e.type == 'match_reset']), 2)
+        # Historic participants may differ from the corrected pair, but references remain validated.
+        raw = archive.model_dump(mode='json')
+        for bad in ('participant_id', 'match_id', 'delta'):
+            broken = json.loads(json.dumps(raw))
+            score = next(e for e in broken['events'] if e['type'] == 'score')
+            score[bad] = 2 if bad == 'delta' else 'missing'
+            with self.assertRaises(ValidationError): State.model_validate(broken)
+        broken = json.loads(json.dumps(raw))
+        next(e for e in broken['events'] if e['type'] == 'match_reset')['match_id'] = 'missing'
+        with self.assertRaises(ValidationError): State.model_validate(broken)
+        broken = json.loads(json.dumps(raw))
+        broken['matches'][0]['scores']['c'] = 0
+        next(e for e in reversed(broken['events']) if e['type'] == 'score' and e['participant_id'] == 'c')['undone'] = False
+        with self.assertRaises(ValidationError): State.model_validate(broken)
+
+        self.action('finish')
+        preview = self.client.post('/api/v1/event-catalog/import/preview', json=dict(
+            json_text=exported.text, event_id='reset-archive')).json()
+        imported = self.client.post('/api/v1/event-catalog/import', json=dict(
+            request_id=str(uuid4()), catalog_session=self.state()['stream_id'], json_text=exported.text,
+            event_id='reset-archive', preview_token=preview['preview_token']))
+        imported.raise_for_status()
+        self.client.post('/api/v1/event-catalog/select', json=dict(request_id=str(uuid4()),
+            catalog_session=self.state()['stream_id'], event_id='reset-archive',
+            selection_token=self.state()['selection_token'])).raise_for_status()
+        self.assertEqual(self.state()['matches'], archive.model_dump(mode='json')['matches'])
+        self.assertFalse(self.state()['can_undo'])
+        self.assertEqual(self.request('live/undo', match_id='m1').status_code, 409)
+
+    def test_reset_invalid_selection_stale_confirmation_and_repeated_request(self):
+        before = self.state()
+        self.assertEqual(self.request('live/reset', match_id='m1').status_code, 409)
+        self.assertEqual(self.state(), before)
+        self.action('select')
+        self.assertEqual(self.request('live/reset', match_id='m1').status_code, 409)
+        self.action('prepare', participant_1='a', participant_2='b', side_l='a', side_r='b')
+        self.action('start')
+        payload = dict(request_id=str(uuid4()), expected_revision=self.state()['revision'],
+                       **self.context(), match_id='m1')
+        self.score()
+        before = self.state()
+        self.assertEqual(self.client.post('/api/v1/live/reset', json=payload).status_code, 409)
+        self.assertEqual(self.request('live/reset', match_id='m2').status_code, 409)
+        self.assertEqual(self.state(), before)
+        payload.update(expected_revision=before['revision'])
+        reset = self.client.post('/api/v1/live/reset', json=payload)
+        reset.raise_for_status()
+        self.assertEqual(self.client.post('/api/v1/live/reset', json=payload).json(), reset.json())
+        self.assertEqual(self.request('live/reset', match_id='m1').status_code, 409)
+        self.action('prepare', participant_1='a', participant_2='b', side_l='a', side_r='b')
+        self.action('start'); self.score()
+        # Delayed retry of the acknowledged reset cannot clear a new attempt.
+        self.client.post('/api/v1/live/reset', json=payload).raise_for_status()
+        self.assertEqual(self.state()['live']['left']['score'], 1)
+        self.action('finish'); self.action('select', match_id='m2')
+        self.assertEqual(self.request('live/reset', match_id='m1').status_code, 409)
+
+    def test_reset_storage_failure_and_parallel_operators(self):
+        self.start(); self.score()
+        before = self.state(); persisted = self.path.read_bytes()
+        with patch('livescore.storage.os.replace', side_effect=OSError('disk error')):
+            self.assertEqual(self.request('live/reset', match_id='m1').status_code, 503)
+        self.assertEqual(self.state(), before)
+        self.assertEqual(self.path.read_bytes(), persisted)
+        payloads = [dict(request_id=str(uuid4()), expected_revision=before['revision'],
+                         **self.context(), match_id='m1') for _ in range(2)]
+        with self.client.websocket_connect('/api/v1/ws') as a, self.client.websocket_connect('/api/v1/ws') as b:
+            a.receive_json(); b.receive_json()
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                responses = list(pool.map(lambda p:self.client.post('/api/v1/live/reset', json=p), payloads))
+            self.assertEqual(sorted(r.status_code for r in responses), [200, 409])
+            self.assertEqual(a.receive_json(), self.state())
+            self.assertEqual(b.receive_json(), self.state())
+        self.assertEqual(load(self.path).matches[0].status, 'scheduled')
+        self.assertEqual(len([e for e in load(self.path).events if e.type == 'match_reset']), 1)
+
     def test_negative_and_zero_and_boolean_scores_rejected(self):
         self.start()
         for delta, code in ((-1,409),(0,422),(2,422),(True,422),('1',422)):

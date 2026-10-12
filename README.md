@@ -16,7 +16,8 @@ Ermittlung von Finalpaarungen.
 - Veranstaltungen, Wettkampfflächen (Play Areas), Teilnehmer, Referees und Spielpläne
   im Browser anlegen und bearbeiten; native LiveScore-JSON-Dateien importieren und exportieren.
 - Spielstände mit **+1 / −1** erfassen und mit **UNDO** korrigieren.
-- Paarungen vor Spielbeginn korrigieren, Links/Rechts zuordnen, Seiten wechseln
+- Paarungen korrigieren, auch nach Spielbeginn durch Zurücksetzen des einzelnen Spiels;
+  Links/Rechts zuordnen, Seiten wechseln
   und Ergebnisse bestätigen.
 - Sportprofile mit Abschnitten, Pausenbezeichnungen und zusätzlichen Zählern im Browser
   verwalten; alle Profiltexte gemeinsam für DE/EN/CS pflegen. Wettkampfdaten manuell erfassen. Keine automatische Wettkampfregel-Auswertung.

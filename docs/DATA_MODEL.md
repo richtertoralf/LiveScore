@@ -63,6 +63,7 @@ löst die Zuordnung bereits in `left` und `right` auf; siehe [API](API.md).
 | Abschnittspause setzen/aufheben | Status bleibt `live`, `intermission` wird geändert |
 | Ergebnis bestätigen | `live/paused → finished` |
 | Wiederöffnen | `finished → live` |
+| Einzelnes Spiel zurücksetzen | `ready/live/paused/finished → scheduled` |
 
 `ready` verlangt zwei verschiedene bekannte Teilnehmer, eine gültige
 Seitenzuordnung und Scores von null. Score, Counter und Undo sind nur bei
@@ -134,7 +135,9 @@ Ein Abschnittswechsel und das Spielende setzen sie zurück. Wiederöffnen setzt 
 Status direkt auf `live` und stellt keine frühere Abschnittspause automatisch wieder her.
 Die Struktur (`periods`, Counter-IDs und `reset_each_period`) ist ab Vorbereitung
 festgelegt; nach Zurücknehmen der Vorbereitung ist sie wieder bearbeitbar, sofern
-noch kein Spiel begonnen hat. Texte, Schwellen und Zählerreihenfolge bleiben bearbeitbar.
+alle Spiele wieder geplant sind. Das gilt auch nach ausdrücklichem Zurücksetzen
+aller Spiele; alte Ereignisse beschreiben dann keine aktuellen Ergebnisse mehr.
+Texte, Schwellen und Zählerreihenfolge bleiben bearbeitbar.
 Vor dem ersten Spiel werden bei Strukturänderungen nur leere Counterhistorien
 neu initialisiert. Erfasste Werte werden niemals durch Profilpflege gelöscht.
 
@@ -208,6 +211,16 @@ Browser aktualisiert. Ein Schreibfehler übernimmt die Änderung nicht.
 Die Ereignisliste speichert relevante Zustandswechsel und Score-/Zähleraktionen
 mit Spiel-/Teilnehmerbezug, Zeitstempel, Revision und Request-ID. Score-Undo markiert
 das ursprüngliche Ereignis als zurückgenommen und verweist darauf.
+`match_reset` bildet die Grenze zwischen zwei Spielversuchen derselben Match-ID.
+Zurücksetzen erhält Planfelder und Ereignisse; es leert Scores, Seiten und Counter,
+setzt `period: 1`, `intermission: false` und `status: scheduled`. Die Kontrollrevision
+steigt weiter und bleibt auch bei anschließender Spielplanbearbeitung erhalten.
+Validierung und Undo prüfen die aktuellen Scores ausschließlich gegen Score-Ereignisse
+nach der letzten Reset-Grenze. Ältere Score-Ereignisse müssen weiterhin auf bekannte
+Spiele und Teilnehmer verweisen und ein gültiges Delta besitzen; sie dürfen zur
+früheren, inzwischen korrigierten Paarung gehören. Ihre Undo-Markierungen bleiben
+unverändert. Andere Spiele erhalten keine neue Undo-Grenze.
+
 Die Liste bleibt für die Veranstaltung erhalten und ermöglicht auch nach Neustart
 die Erkennung wiederholter Spiel-/Konfigurationsrequests. Counter werden mit
 Gegenbuchungen korrigiert; Undo betrifft ausschließlich Scores.

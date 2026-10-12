@@ -320,6 +320,7 @@ Interaktive OpenAPI-Dokumentation liegt unter `/docs`, das Schema unter
 | `POST /api/v1/live/undo` | letzte geeignete Score-Aktion zurücknehmen |
 | `POST /api/v1/live/finish` | Ergebnis bestätigen (live/paused → finished) |
 | `POST /api/v1/live/reopen` | ausgewähltes beendetes Spiel wieder öffnen (finished → live) |
+| `POST /api/v1/live/reset` | ausgewähltes Spiel zurücksetzen (ready/live/paused/finished → scheduled), Operator und Admin |
 | `WS /api/v1/ws` | initialer UI-Snapshot, weitere Snapshots, Heartbeat alle 5 Sekunden bei Leerlauf |
 
 Mutationen geben den aktuellen UI-Snapshot zurück. Spielaktionen benötigen `request_id`, `event_id`, `selection_token` und `match_id`.
@@ -329,6 +330,28 @@ zusätzlich `participant_1`, `participant_2`, `side_l` und `side_r` als IDs.
 Config-Aktionen benötigen `request_id`, `expected_revision`, `event_id`,
 `selection_token` und `data` mit den
 jeweiligen Planfeldern; Status und Scores dürfen dort nicht gesetzt werden.
+
+### Einzelnes Spiel zurücksetzen (Issue #4)
+
+`POST /api/v1/live/reset` verwendet denselben `MatchCommand` wie `finish`:
+`request_id`, `event_id`, `selection_token`, `match_id` und `expected_revision`.
+Nur das ausgewählte vorbereitete, laufende oder beendete Spiel ist zurücksetzbar.
+Ein fremdes Spiel, veralteter Stand oder bereits `scheduled` ergibt **409**.
+Wiederholung mit derselben Request-ID und demselben Inhalt ist sicher, auch nach Neustart.
+
+Die Live-Antwort liefert danach `status: "scheduled"`, `left: null`, `right: null`,
+`period: 1` und `period_info.code: "not_started"`. Die Paarung bleibt im Spielplan,
+aber es gibt keine vorbereiteten Seiten. Nach erneutem `prepare` darf die Paarung
+abweichen; Scores und Counter starten bei null. Andere Spiele bleiben unverändert.
+`can_undo` und Undo berücksichtigen nur den aktuellen Spielversuch.
+
+Version **0.2.1** ergänzt den Endpunkt und das Ereignis `match_reset`; bestehende
+Live-Feldnamen und Veranstaltungsdateien bleiben erhalten, ohne Migration.
+Clients, die selbst Scores aus Ereignissen rekonstruieren, müssen `match_reset`
+als Reset-Grenze behandeln. Ältere Serverversionen können neue Exporte mit
+Reset-Historien wegen ihrer früheren Score-Validierung ablehnen; solche Archive
+mit 0.2.1 oder neuer öffnen. Das Zurücksetzen ist keine Ergebnisänderung mit
+Datenübernahme: für eine reine Ergebniskorrektur dient weiterhin `reopen`.
 
 Beispiel Score-Request (Werte immer aus aktuellem UI-Snapshot übernehmen):
 

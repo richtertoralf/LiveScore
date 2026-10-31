@@ -27,6 +27,12 @@ if sys.argv[1:] == ['--version']:
         parts.append(origin)
     print(f"LiveScore {(root / 'VERSION').read_text().strip()} ({', '.join(parts)})")
     raise SystemExit(0)
+if sys.argv[1:2] == ['--status']:
+    # Lesend: -B verhindert, dass auch mit sudo __pycache__ in der Laufzeit entsteht.
+    venv_python = root / '.venv/bin/python'
+    python = str(venv_python) if venv_python.exists() else sys.executable
+    os.chdir(root)
+    os.execv(python, [python, '-B', '-m', 'livescore.status', *sys.argv[2:]])
 if sys.argv[1:2] in (['--upgrade'], ['--install']):
     args = [sys.executable, str(root / 'tools/deploy.py'), sys.argv[1][2:]]
     if settings.get('staging_root'):

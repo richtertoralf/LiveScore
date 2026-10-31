@@ -1,6 +1,6 @@
 # LiveScore
 
-[![Version 0.2.3](https://img.shields.io/badge/version-0.2.3-blue)](VERSION)
+[![Version 0.2.4](https://img.shields.io/badge/version-0.2.4-blue)](VERSION)
 
 LiveScore erfasst Live-Spielstände bei Turnieren und stellt sie für Anzeigetafeln,
 Dashboards und Grafikoverlays in TV- und Livestreamproduktionen bereit.
@@ -111,6 +111,9 @@ Andere Anwendungen können die URL beispielsweise einmal pro Sekunde abfragen;
 eine Anmeldung ist für diesen Endpunkt nicht nötig. LiveScore stellt die Daten
 bereit, die Darstellung übernimmt die jeweilige Anwendung.
 [API-Dokumentation und Beispielantwort](docs/API.md).
+
+`livescore --status` zeigt ohne root Version, Commit, Dienst, Erreichbarkeit der
+Weboberfläche, die Adressen im LAN sowie die Pfade von Konfiguration und Daten.
 
 Bei der Aktualisierung über `sudo livescore --upgrade` wird auf die neue LiveScore-API umgestellt; angeschlossene Anwendungen müssen gegebenenfalls angepasst werden.
 

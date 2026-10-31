@@ -53,6 +53,35 @@ def version(root):
     return value
 
 
+def source_state(source):
+    """Commit, Branch und dirty-Kennung einer Quelle; unbekannt ohne Git."""
+    def git(*args):
+        return subprocess.run(['git', '-c', f'safe.directory={source}', '-C', str(source), *args],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    try:
+        return {'commit': git('rev-parse', 'HEAD'), 'branch': git('branch', '--show-current') or None,
+                'dirty': bool(git('status', '--porcelain', '--untracked-files=no'))}
+    except (OSError, subprocess.CalledProcessError):
+        return {'commit': None, 'branch': None, 'dirty': None}
+
+
+def receipt(root):
+    try:
+        return json.loads((root / 'installation.json').read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def describe(value, state):
+    commit = state.get('commit')
+    text = f'{value} (commit {commit[:7]}' if commit else f'{value} (commit unbekannt'
+    if state.get('dirty'):
+        text += ', dirty'
+    if state.get('branch'):
+        text += f", branch {state['branch']}"
+    return text + ')'
+
+
 def clone(target):
     """Clone the public repository without interactive authentication."""
     env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GIT_ASKPASS='/bin/false',
@@ -237,16 +266,26 @@ class Deployment:
             time.sleep(1)
         fail('Dienst antwortet nach Start nicht korrekt; journalctl -u livescore prüfen.')
 
-    def deploy(self, source, upgrade=False):
+    def deploy(self, source, upgrade=False, origin=None):
         old = self.current.resolve() if self.current.exists() else None
         if upgrade and not old:
             fail('Keine installierte Laufzeit gefunden. Zuerst install.sh ausführen.')
         if not upgrade and old:
             fail('Bereits installiert. Unverändert; bitte sudo livescore --upgrade verwenden.')
+        state = source_state(source)
         if old:
-            print(f'Installiert: {version(old)}; Ziel: {version(Path(source))}', flush=True)
+            installed = receipt(old)
+            print(f'Installiert: {describe(version(old), installed)}; '
+                  f'Ziel: {describe(version(Path(source)), state)}', flush=True)
             if tuple(map(int, version(Path(source)).split('.'))) < tuple(map(int, version(old).split('.'))):
                 fail('Downgrade wird nicht ausgeführt.')
+            # Gleicher Stand: gleiche Version und gleicher sauberer Commit. Kein
+            # Neubau, keine Sicherung, kein Neustart.
+            if (version(old) == version(Path(source)) and installed.get('commit')
+                    and installed.get('commit') == state['commit']
+                    and installed.get('dirty') is False and state['dirty'] is False):
+                print(f'LiveScore {version(old)} ist bereits aktuell.')
+                return
         target = self.build(source)
         switched = False
         stopped = False
@@ -255,8 +294,14 @@ class Deployment:
         old_profiles_mode = 0o600
         profiles_changed = False
         was_active = self.active()
+        # Eine Erstinstallation startet den Dienst; ein Upgrade erhält den
+        # vorherigen Zustand und startet einen gestoppten Dienst nicht.
+        start = was_active or not old
         old_unit = self.unit.read_bytes() if self.unit.exists() else None
         try:
+            atomic_text(target / 'installation.json', json.dumps({
+                **receipt(target), **state, 'source': origin or str(Path(source).resolve()),
+                'installed_at': time.strftime('%Y-%m-%dT%H:%M:%S%z')}))
             if upgrade:
                 if not self.config_file.is_file():
                     fail('Config fehlt; Upgrade erzeugt keine Ersatzkonfiguration.')
@@ -265,7 +310,7 @@ class Deployment:
             info = self.inspect(target)
             if upgrade and info['auth_enabled'] and not Path(info['auth_file']).is_file():
                 fail('Auth-Datei fehlt; Upgrade setzt keine Passwörter auf Initialwerte zurück.')
-            if not self.staging and not was_active:
+            if not self.staging and start and not was_active:
                 # Refuse to start over an unrelated listener; never stop its process.
                 with socket.socket(socket.AF_INET6 if ':' in info['bind_host'] else socket.AF_INET) as sock:
                     sock.bind((info['bind_host'], info['port']))
@@ -299,8 +344,11 @@ class Deployment:
             self.systemctl('daemon-reload')
             if not old:
                 self.systemctl('enable', UNIT)
-            self.systemctl('restart', UNIT)
-            self.health(info, version(target))
+            if start:
+                self.systemctl('restart', UNIT)
+                self.health(info, version(target))
+            else:
+                print('Dienst war gestoppt und bleibt gestoppt.')
         except BaseException:
             rollback_errors = []
 
@@ -405,7 +453,7 @@ def main():
                 with tempfile.TemporaryDirectory(prefix='.download-', dir=deployment.prefix) as temporary:
                     source = Path(temporary) / 'source'
                     clone(source)
-                    deployment.deploy(source, upgrade=upgrade)
+                    deployment.deploy(source, upgrade=upgrade, origin='github main')
     except (OSError, ValueError, RuntimeError, EOFError, subprocess.CalledProcessError) as exc:
         # No configuration contents, password hashes or captured output in errors.
         print(f'FEHLER: {exc}', file=sys.stderr)

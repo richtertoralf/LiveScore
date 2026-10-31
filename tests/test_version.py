@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+import re
 import subprocess
 import shutil
 import sys
@@ -30,13 +32,27 @@ class VersionTest(unittest.TestCase):
             shutil.copytree(ROOT / 'livescore', root / 'livescore', ignore=shutil.ignore_patterns('__pycache__'))
             shutil.copytree(ROOT / 'bin', root / 'bin')
             (root / 'VERSION').write_text('9.8.7\n')
-            for command in ([str(root / 'bin/livescore'), '--version'], [sys.executable, '-m', 'livescore', '--version']):
-                result = subprocess.run(command, cwd=root, capture_output=True, text=True, check=True)
-                self.assertEqual(result.stdout, 'LiveScore 9.8.7\n')
+            result = subprocess.run([str(root / 'bin/livescore'), '--version'], cwd=root,
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout, 'LiveScore 9.8.7 (commit unbekannt)\n')
+            result = subprocess.run([sys.executable, '-m', 'livescore', '--version'], cwd=root,
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout, 'LiveScore 9.8.7\n')
+            (root / 'installation.json').write_text(json.dumps({
+                'commit': '0123456789abcdef0123456789abcdef01234567', 'branch': 'main', 'dirty': False,
+                'source': 'github main', 'installed_at': '2026-10-31T12:00:00+0100'}))
+            result = subprocess.run([str(root / 'bin/livescore'), '--version'], cwd=root,
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout, 'LiveScore 9.8.7 (commit 0123456, branch main, '
+                                            'github main 2026-10-31T12:00:00+0100)\n')
 
     def test_release_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8'), '0.2.2\n')
-        self.assertEqual(__version__, '0.2.2')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8'), '0.2.3\n')
+        self.assertEqual(__version__, '0.2.3')
+
+    def test_readme_badge_matches_version_file(self):
+        readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+        self.assertEqual(re.findall(r'img\.shields\.io/badge/version-([0-9.]+)-', readme), [__version__])
 
     def test_version_exits_without_loading_server_config(self):
         result = subprocess.run(
@@ -45,4 +61,4 @@ class VersionTest(unittest.TestCase):
             cwd=ROOT, capture_output=True, text=True, timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, 'LiveScore 0.2.2\n')
+        self.assertEqual(result.stdout, f'LiveScore {__version__}\n')

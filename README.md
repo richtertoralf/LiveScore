@@ -1,5 +1,7 @@
 # LiveScore
 
+[![Version 0.2.3](https://img.shields.io/badge/version-0.2.3-blue)](VERSION)
+
 LiveScore erfasst Live-Spielstände bei Turnieren und stellt sie für Anzeigetafeln,
 Dashboards und Grafikoverlays in TV- und Livestreamproduktionen bereit.
 Es unterstützt Begegnungen zwischen zwei Mannschaften oder Einzelpersonen.

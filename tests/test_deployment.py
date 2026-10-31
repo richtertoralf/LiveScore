@@ -21,6 +21,8 @@ from tools.deploy import Deployment, MARKER, RUNTIME, FILES, atomic_text
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / '.test-artifacts'
+VERSION = (ROOT / 'VERSION').read_text().strip()
+UNKNOWN = {'commit': None, 'branch': None, 'dirty': None}
 
 
 class DeploymentTest(unittest.TestCase):
@@ -34,6 +36,8 @@ class DeploymentTest(unittest.TestCase):
         # Network/venv creation is separately exercised by the full staged smoke.
         # Everything after build (validation, seed, swap, backup, rollback) is real.
         patch.object(self.deployment, 'build', side_effect=self.build).start()
+        # Independent of whether the developer checkout is clean right now.
+        self.source_state = patch.object(deploy, 'source_state', return_value=UNKNOWN).start()
 
     def build(self, source):
         d = self.deployment
@@ -67,9 +71,9 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(load(config.data_dir / 'events/prague-2026.json'), expected)
         self.assertEqual((len(expected.matches), len(expected.participants), len(expected.referees)), (14,6,6))
         result = subprocess.run([self.deployment.cli,'--version'], capture_output=True,text=True,check=True)
-        self.assertEqual(result.stdout, 'LiveScore 0.2.2\n')
+        self.assertTrue(result.stdout.startswith(f'LiveScore {VERSION} (commit unbekannt'), result.stdout)
         with TestClient(create_app(data_dir=config.data_dir,auth_config=config.auth)) as client:
-            self.assertEqual(client.get('/api/version').json(), {'version':'0.2.2'})
+            self.assertEqual(client.get('/api/version').json(), {'version':VERSION})
             self.assertEqual(client.get('/api/v1/live').status_code,200)
             catalog = client.app.state.service
             self.assertEqual(catalog.selection.active_event_id,'prague-2026')
@@ -117,7 +121,7 @@ class DeploymentTest(unittest.TestCase):
         repeated=self.snapshot()
         with self.deployment.lock():self.deployment.deploy(ROOT,upgrade=True)
         self.assertEqual(self.snapshot(),repeated)
-        self.assertEqual((self.deployment.current / 'VERSION').read_text(),'0.2.2\n')
+        self.assertEqual((self.deployment.current / 'VERSION').read_text(),f'{VERSION}\n')
         auth = Auth(config.auth)
         self.assertTrue(verify_password(password,auth.credentials.users['admin'].password_hash))
         self.assertFalse(verify_password('admin',auth.credentials.users['admin'].password_hash))
@@ -145,7 +149,8 @@ class DeploymentTest(unittest.TestCase):
         save_library(config.data_dir/'sport-profiles.json',ProfileLibrary())
         before=self.snapshot(); old=self.deployment.current.resolve()
         unit=self.deployment.unit.read_bytes()
-        with patch.object(self.deployment,'health',side_effect=RuntimeError('simulated start failure')):
+        with patch.object(self.deployment,'active',return_value=True), \
+             patch.object(self.deployment,'health',side_effect=RuntimeError('simulated start failure')):
             with self.assertRaisesRegex(RuntimeError,'simulated'):
                 self.deployment.deploy(ROOT,upgrade=True)
         self.assertEqual(self.deployment.current.resolve(),old)
@@ -193,12 +198,50 @@ class DeploymentTest(unittest.TestCase):
     def test_failed_service_control_during_rollback_still_restores_code(self):
         config=self.install(); Auth(config.auth)
         old=self.deployment.current.resolve()
+        calls=[]
         def control(*args):
-            if args[0] in ('restart','stop'): raise RuntimeError('service control unavailable')
-        with patch.object(self.deployment,'systemctl',side_effect=control):
+            calls.append(args[0])
+            # The first stop succeeds; restart and the rollback stop fail.
+            if args[0]=='restart' or (args[0]=='stop' and 'restart' in calls):
+                raise RuntimeError('service control unavailable')
+        with patch.object(self.deployment,'active',return_value=True), \
+             patch.object(self.deployment,'systemctl',side_effect=control):
             with self.assertRaisesRegex(RuntimeError,'service control unavailable'):
                 self.deployment.deploy(ROOT,upgrade=True)
         self.assertEqual(self.deployment.current.resolve(),old)
+
+    def test_same_clean_commit_is_a_no_op_and_new_commit_is_installed(self):
+        config=self.install(); Auth(config.auth)
+        clean={'commit':'a'*40,'branch':'main','dirty':False}
+        self.source_state.return_value=clean
+        with self.deployment.lock(): self.deployment.deploy(ROOT,upgrade=True)
+        receipt=json.loads((self.deployment.current/'installation.json').read_text())
+        self.assertEqual({k:receipt[k] for k in clean},clean)
+        self.assertEqual(receipt['config'],str(self.deployment.config_file))
+        current=self.deployment.current.resolve(); backups=list((self.deployment.state/'backups').iterdir())
+        calls=[]
+        with patch.object(self.deployment,'active',return_value=True), \
+             patch.object(self.deployment,'systemctl',side_effect=lambda *a: calls.append(a)):
+            with self.deployment.lock(): self.deployment.deploy(ROOT,upgrade=True)
+        self.assertEqual(calls,[])
+        self.assertEqual(self.deployment.current.resolve(),current)
+        self.assertEqual(list((self.deployment.state/'backups').iterdir()),backups)
+        for state in ({**clean,'commit':'b'*40}, {**clean,'dirty':True}):
+            with self.subTest(state=state):
+                self.source_state.return_value=state
+                with self.deployment.lock(): self.deployment.deploy(ROOT,upgrade=True)
+                self.assertNotEqual(self.deployment.current.resolve(),current)
+                current=self.deployment.current.resolve()
+        self.assertEqual(json.loads((current/'installation.json').read_text())['dirty'],True)
+
+    def test_upgrade_keeps_a_stopped_service_stopped(self):
+        config=self.install(); Auth(config.auth)
+        calls=[]
+        with patch.object(self.deployment,'active',return_value=False), \
+             patch.object(self.deployment,'systemctl',side_effect=lambda *a: calls.append(a)), \
+             patch.object(self.deployment,'health',side_effect=AssertionError('no start, no health check')):
+            with self.deployment.lock(): self.deployment.deploy(ROOT,upgrade=True)
+        self.assertEqual(calls,[('daemon-reload',)])
 
     def test_foreign_paths_and_symlinks_refused(self):
         d=self.deployment

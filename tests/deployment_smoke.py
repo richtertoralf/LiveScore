@@ -126,7 +126,7 @@ def run(remote_upgrade=False):
             command(cli,'--upgrade',*(() if remote_upgrade else ('--source',ROOT)))
             assert snapshot()==repeated
             before=repeated
-            assert subprocess.check_output([cli,'--version'],text=True)==f'LiveScore {target_version}\n'
+            assert subprocess.check_output([cli,'--version'],text=True).startswith(f'LiveScore {target_version} (commit ')
             process=start(target_version)
             with httpx.Client(base_url=url) as client:
                 login(client,'admin',PASSWORD)

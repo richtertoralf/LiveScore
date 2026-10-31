@@ -47,8 +47,8 @@ class VersionTest(unittest.TestCase):
                                             'github main 2026-10-31T12:00:00+0100)\n')
 
     def test_release_version(self):
-        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8'), '0.2.3\n')
-        self.assertEqual(__version__, '0.2.3')
+        self.assertEqual((ROOT / 'VERSION').read_text(encoding='utf-8'), '0.2.4\n')
+        self.assertEqual(__version__, '0.2.4')
 
     def test_readme_badge_matches_version_file(self):
         readme = (ROOT / 'README.md').read_text(encoding='utf-8')

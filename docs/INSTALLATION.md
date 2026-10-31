@@ -41,8 +41,18 @@ git clone https://github.com/richtertoralf/LiveScore.git
 cd LiveScore
 sudo ./install.sh
 livescore --version
-systemctl status livescore
+livescore --status
 ```
+
+`livescore --status` ist rein lesend und braucht kein root. Er zeigt Version,
+Commit, Branch und Herkunft, den Zustand von `livescore.service` mit Autostart,
+ob die Weboberfläche lokal antwortet, die URLs für alle LAN-Adressen (bei
+Loopback-Bindung nur die lokale) und die Pfade von Konfiguration und Daten.
+Ohne Leserecht auf `/etc/livescore` gelten Standardport 8730 und `0.0.0.0`; der
+vollständige Status kommt dann mit `sudo livescore --status`. Exitcode 0: kein
+technischer Fehler, auch bei bewusst gestopptem Dienst; 1: Dienst
+fehlgeschlagen, aktiver Dienst antwortet nicht oder keine Installation; 2:
+ungültige Konfiguration.
 
 `install.sh` installiert den lokalen Checkout ohne weitere Abfrage. Alternativ lädt
 `sudo ./bin/livescore --install` den aktuellen Stand von GitHub/main ohne Anmeldung.

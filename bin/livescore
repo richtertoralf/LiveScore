@@ -6,11 +6,27 @@ from pathlib import Path
 import sys
 
 root = Path(__file__).resolve().parent.parent
-if sys.argv[1:] == ['--version']:
-    print('LiveScore ' + (root / 'VERSION').read_text().strip())
-    raise SystemExit(0)
 metadata = root / 'installation.json'
 settings = json.loads(metadata.read_text()) if metadata.exists() else {}
+if sys.argv[1:] == ['--version']:
+    # Herkunft aus installation.json (Installation) bzw. Git (Checkout).
+    info = settings
+    if not info.get('commit') and (root / '.git').exists():
+        import subprocess
+        def git(*args):
+            return subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True).stdout.strip()
+        info = {'commit': git('rev-parse', 'HEAD'), 'branch': git('branch', '--show-current'),
+                'dirty': bool(git('status', '--porcelain', '--untracked-files=no')), 'source': 'checkout'}
+    parts = [f"commit {info['commit'][:7]}" if info.get('commit') else 'commit unbekannt']
+    if info.get('dirty'):
+        parts.append('dirty')
+    if info.get('branch'):
+        parts.append(f"branch {info['branch']}")
+    origin = f"{info.get('source') or ''} {info.get('installed_at') or ''}".strip()
+    if origin:
+        parts.append(origin)
+    print(f"LiveScore {(root / 'VERSION').read_text().strip()} ({', '.join(parts)})")
+    raise SystemExit(0)
 if sys.argv[1:2] in (['--upgrade'], ['--install']):
     args = [sys.executable, str(root / 'tools/deploy.py'), sys.argv[1][2:]]
     if settings.get('staging_root'):

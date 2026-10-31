@@ -57,7 +57,7 @@ systemctl status livescore
 | `/var/lib/livescore/data/events/*.json` | einzelne Veranstaltungen |
 | `/var/lib/livescore/data/imports/*.json` | gespeicherte Importdateien als Grundlage für „Zurücksetzen“ |
 | `/var/lib/livescore/data/active-event.json` | aktive Veranstaltung und Auswahlkennung |
-| `/var/lib/livescore/backups/` | Sicherung von Config/Auth und Daten vor jedem Upgrade |
+| `/var/lib/livescore/backups/` | Sicherung von Config/Auth und Daten vor jedem tatsächlich ausgeführten Upgrade |
 | `/etc/systemd/system/livescore.service` | Systemdienst mit eigenem Konto `livescore` |
 
 Die Betriebsverzeichnisse erhalten `.livescore-managed` als Herkunftsmarkierung.
@@ -291,8 +291,13 @@ Anmeldung in ein temporäres Verzeichnis innerhalb der Installation
 (siehe [GitHub-Zugang](#github-zugang-öffentliches-repository)).
 Mit `--source` wird stattdessen ein lokaler Checkout verwendet. Es führt keinen Git-Pull in lokalen
 Betreiberdaten aus und benötigt keinen Git-Checkout in der installierten Laufzeit.
-Es kann auch einen ergänzten Stand derselben Versionsnummer installieren;
-Versionsrückschritte werden abgewiesen.
+Version und Commit werden verglichen: Bei gleicher Version und gleichem
+sauberem Commit meldet es „bereits aktuell“ und ändert nichts, ohne Neubau,
+Sicherung oder Neustart. Ein neuer Commit derselben Versionsnummer wird
+installiert; Versionsrückschritte werden abgewiesen. Commit, Branch und Quelle
+stehen in `installation.json` der Laufzeit; `livescore --version` zeigt sie.
+Von 0.2.2 und älter läuft das Upgrade noch mit dem alten Installer ohne
+Commit; das nächste Upgrade ergänzt ihn einmalig.
 
 Ablauf:
 
@@ -302,8 +307,9 @@ Ablauf:
 4. Vorhandene Config/Auth/Eventdateien lesend validieren. Fehlende Auth-Datei bei
    aktiviertem Auth führt zum Abbruch, statt neue Startpasswörter zu erzeugen.
 5. Eigenen Dienst stoppen und Config/Auth sowie alle Veranstaltungsdaten sichern.
-6. `current` atomar umschalten, Unit aktualisieren, Dienst neu starten und öffentliche
-   Versionsantwort sowie systemd-Status prüfen.
+6. `current` atomar umschalten, Unit aktualisieren, einen zuvor laufenden Dienst neu
+   starten und öffentliche Versionsantwort sowie systemd-Status prüfen. Ein gestoppter
+   Dienst bleibt gestoppt.
 7. Bei Fehlern nach dem Umschalten zur bisherigen Laufzeit/Unit zurückkehren und
    einen zuvor laufenden Dienst wieder starten. Config/Auth/Eventdaten werden nicht
    durch alte Sicherungen überschrieben.

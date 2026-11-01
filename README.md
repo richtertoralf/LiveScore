@@ -7,6 +7,9 @@ Dashboards und Grafikoverlays in TV- und Livestreamproduktionen bereit.
 Es unterstützt Begegnungen zwischen zwei Mannschaften oder Einzelpersonen.
 Die Bedienung erfolgt im Browser auf Smartphone, Tablet oder Rechner.
 
+**Status:** In Entwicklung – installierbar und mit den unten beschriebenen
+Funktionen nutzbar.
+
 Die Anwendung läuft auf einem lokalen Server und funktioniert nach der Installation
 auch ohne Internet. Veranstaltungsdaten werden als JSON-Dateien gespeichert;
 eine Datenbank ist nicht erforderlich. LiveScore ergänzt die Turnierverwaltung um
@@ -22,8 +25,10 @@ Ermittlung von Finalpaarungen.
 - Paarungen korrigieren, auch nach Spielbeginn durch Zurücksetzen des einzelnen Spiels;
   Links/Rechts zuordnen, Seiten wechseln
   und Ergebnisse bestätigen.
-- Sieben fertige Sportprofile auswählen und im Browser anpassen;
-  alle Profiltexte gemeinsam für DE/EN/CS pflegen. Wettkampfdaten manuell erfassen. Keine automatische Wettkampfregel-Auswertung.
+- Sieben fertige Sportprofile – Blindenfußball, Showdown, Boxen, Fußball,
+  Handball, Tischtennis und Volleyball – auswählen und im Browser anpassen;
+  alle Profiltexte gemeinsam für DE/EN/CS pflegen. Wettkampfdaten werden manuell
+  erfasst; Wettkampfregeln wertet LiveScore nicht automatisch aus.
 - Mehrere Bediener sehen und bearbeiten gemeinsam denselben aktuellen Spielstand.
 - Oberfläche auf Englisch, Deutsch und Tschechisch; getrennte Zugänge für
   Administration und Bedienung.
@@ -65,12 +70,19 @@ python3 -m venv .venv
 Der Server läuft im Vordergrund. Für Windows, Konfiguration, Updates und Backups
 siehe [Installation und Betrieb](docs/INSTALLATION.md).
 
-### Erste Anmeldung
+### Erste Anmeldung und sichere Einrichtung
 
-Die Startzugänge sind **admin / admin** und **operator / operator**.
-Beim ersten Admin-Login unter **Benutzer** zuerst das eigene Passwort ändern,
-anschließend das Operator-Passwort setzen. Vor Internetfreigabe beide Startpasswörter
-ändern und HTTPS einrichten.
+Jede neue Installation startet mit den allgemein bekannten Zugängen
+**admin / admin** (Administration) und **operator / operator** (Bedienung).
+Beim ersten Admin-Login führt LiveScore direkt zur Benutzerverwaltung:
+
+1. Zuerst das eigene Admin-Passwort ändern.
+2. Danach das Operator-Passwort setzen. Neue Passwörter haben 12 bis 1024 Zeichen.
+3. Erst danach weitere Geräte im Netz anmelden. Für einen Zugang aus dem
+   Internet zusätzlich HTTPS einrichten.
+
+Passwörter liegen als Hashwerte in `/etc/livescore/auth.yml`; Wiederherstellung
+und HTTPS beschreibt [Installation und Betrieb](docs/INSTALLATION.md#benutzer-und-passwörter).
 
 ## Verwendung
 
@@ -112,10 +124,20 @@ eine Anmeldung ist für diesen Endpunkt nicht nötig. LiveScore stellt die Daten
 bereit, die Darstellung übernimmt die jeweilige Anwendung.
 [API-Dokumentation und Beispielantwort](docs/API.md).
 
-`livescore --status` zeigt ohne root Version, Commit, Dienst, Erreichbarkeit der
-Weboberfläche, die Adressen im LAN sowie die Pfade von Konfiguration und Daten.
+Installationen vor Version 0.2.2 erhalten mit dem Upgrade diese Live-API;
+angeschlossene Anwendungen müssen dann gegebenenfalls angepasst werden.
 
-Bei der Aktualisierung über `sudo livescore --upgrade` wird auf die neue LiveScore-API umgestellt; angeschlossene Anwendungen müssen gegebenenfalls angepasst werden.
+## Verwaltung unter Linux
+
+| Befehl | Zweck |
+|---|---|
+| `livescore --version` | installierte Version mit Commit |
+| `livescore --status` | Version, Dienst, Erreichbarkeit der Weboberfläche, LAN-Adressen, Pfade von Konfiguration und Daten; ohne root |
+| `sudo livescore --upgrade` | auf den aktuellen Stand von GitHub aktualisieren |
+| `sudo livescore --upgrade --source PFAD` | aus einem lokalen Checkout aktualisieren |
+| `sudo /opt/livescore/current/uninstall.sh` | Programm entfernen; Konfiguration, Zugänge, Veranstaltungsdaten und Backups bleiben |
+
+Details: [Installation und Betrieb](docs/INSTALLATION.md).
 
 ## Weiterführende Informationen
 
@@ -128,3 +150,17 @@ Bei der Aktualisierung über `sudo livescore --upgrade` wird auf die neue LiveSc
 - [Entwicklung](docs/DEVELOPMENT.md): Codeaufbau, Tests und offene Produktentscheidungen.
 
 LiveScore steht unter der [Apache-2.0-Lizenz](LICENSE).
+
+## Mitmachen
+
+Fehler, Wünsche und Erfahrungen vom Turnier bitte als
+[Issue auf GitHub](https://github.com/richtertoralf/LiveScore/issues) melden. Neue
+Sportprofile und Übersetzungen sind ebenso willkommen wie Code; den Einstieg
+beschreibt [Entwicklung](docs/DEVELOPMENT.md).
+
+## RICHTER.PROJECTS
+
+**Möglichkeiten schaffen.** LiveScore gehört zu RICHTER.PROJECTS. Turniere können
+damit ihre Spielstände ohne eigene Datenbank und ohne Internet live erfassen und an
+Anzeigetafeln, Grafikoverlays und Livestreams weitergeben – bedient im Browser,
+von einem oder mehreren Geräten gleichzeitig.

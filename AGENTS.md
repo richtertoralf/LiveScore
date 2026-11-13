@@ -219,6 +219,19 @@ Beim Entwurf beachten:
 
 Keine Event-Sourcing-Architektur bauen, wenn eine kleine Ereignisliste den konkreten Bedarf erfüllt.
 
+## Gemeinsame Regeln
+
+- Verwaltung: `livescore --help | --version | --status | --upgrade
+  [--source] | --check | --uninstall | --purge [--yes]`; Rückgabecodes 0/1/2.
+  `--purge` nur nach Bestätigung oder mit `--yes` (#14); Upgrade aus dem
+  Branch der Installation (#15).
+- Releases: Tag `vX.Y.Z` und GitHub Release auf `main`; nicht jeder Commit
+  ist ein Release.
+- Oberflächen: Login und Rollen bleiben; gemeinsame Token-Datei und
+  Statusfarben.
+- Read-API ohne Anmeldung, ohne Geheimnisse, ohne Nebenwirkungen.
+- Neue technische Bezeichner englisch.
+
 ## Arbeitsweise
 
 - Die kleinste robuste Lösung bevorzugen, die den konkreten Bedarf erfüllt.

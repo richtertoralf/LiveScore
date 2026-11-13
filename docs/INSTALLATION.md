@@ -132,10 +132,36 @@ den Servernamen oder seine IP-Adresse verwenden. Ohne vorhandene Daten beginnt
 der manuelle Start mit einem leeren Veranstaltungskatalog. Die Prag-Datei kann
 über `/events` importiert und anschließend ausgewählt werden.
 
-## Serverkonfiguration
+## Konfiguration
 
-Im Checkout verwendet LiveScore `config/livescore.yml`, der Linux-Dienst
-`/etc/livescore/livescore.yml`. Beispiel für den Checkout:
+### 1. Überblick
+
+LiveScore kennt drei Arten von Einstellungen:
+
+| Art | Inhalt | Gilt | Ändert |
+|---|---|---|---|
+| Serverkonfiguration `livescore.yml` | Adresse, Port, Datenverzeichnis, Anmeldung | dauerhaft für die Installation | Administrator in der Datei |
+| Zugangsdaten `auth.yml` | Passworthashes der Konten `admin` und `operator` | dauerhaft | Weboberfläche `/users`, CLI `--reset-admin-password` |
+| Veranstaltungsdaten im Datenverzeichnis | Veranstaltung, Sportprofil, Play Areas, Teilnehmer, Spiele, aktive Auswahl | je Veranstaltung | Weboberfläche unter **Veranstaltungen** und **Konfiguration**, siehe [Bedienung](OPERATOR.md#veranstaltung-vorbereiten) |
+
+Umgebungsvariablen werden für die Konfiguration nicht verwendet.
+
+### 2. Speicherorte
+
+| Betrieb | Serverkonfiguration | Zugangsdaten | Veranstaltungsdaten |
+|---|---|---|---|
+| Linux-Dienst | `/etc/livescore/livescore.yml` | `/etc/livescore/auth.yml` | `/var/lib/livescore/data/` |
+| Checkout, manueller Start | `config/livescore.yml` | `config/auth.yml` | `data/` (über `data_dir: ../data`) |
+
+Welche Datei der Dienst liest, steht in `installation.json` der installierten
+Laufzeit (`/opt/livescore/current/installation.json`); der Wrapper
+`livescore` übergibt sie an den Server. Alle weiteren Installationspfade nennt
+die Tabelle unter [Erstinstallation](#erstinstallation), den Aufbau des
+Datenverzeichnisses das [Datenmodell](DATA_MODEL.md#dateien-und-migration).
+
+### 3. Einstellungen
+
+Beispiel für den Checkout (`config/livescore.yml`):
 
 ```yaml
 bind_host: 0.0.0.0
@@ -148,20 +174,42 @@ auth:
   secure_cookie: false
 ```
 
-| Einstellung | Bedeutung |
-|---|---|
-| `bind_host` | `0.0.0.0` für Zugriff über Netzwerkschnittstellen, `127.0.0.1` nur lokal |
-| `port` | freier TCP-Port von 1 bis 65535; Standard `8730` für Oberfläche und API |
-| `data_dir` | Veranstaltungsdateien und aktive Auswahl; installiert: `/var/lib/livescore/data` |
-| `auth.enabled` | Login für Bedienung und Verwaltung; Standard `true` |
-| `auth.file` | Passwortdatei; installiert: `/etc/livescore/auth.yml` |
-| `auth.session_hours` | Session-Laufzeit ab Login; Standard 12 Stunden |
-| `auth.secure_cookie` | `true` bei HTTPS; für lokalen HTTP-Zugriff `false` |
+| Einstellung | Bedeutung | Zulässige Werte | Standard |
+|---|---|---|---|
+| `bind_host` | Adresse, an die der Server bindet | `0.0.0.0` für alle Netzwerkschnittstellen, `127.0.0.1` nur lokal, oder eine eigene Adresse | Pflichtangabe; Installer: `0.0.0.0` |
+| `port` | TCP-Port für Oberfläche und API | ganze Zahl 1–65535 | Pflichtangabe; Installer: `8730` |
+| `data_dir` | Veranstaltungsdateien und aktive Auswahl | Pfad; der Linux-Installer verlangt einen Ort innerhalb `/var/lib/livescore/data` | Installer: `/var/lib/livescore/data` |
+| `data_file` | Legacy-Option statt `data_dir`; ihr Elternverzeichnis wird das Datenverzeichnis | Dateipfad | – |
+| `auth.enabled` | Anmeldung für Bedienung und Verwaltung | `true`, `false` | `true` |
+| `auth.file` | Passwortdatei | Pfad; der Linux-Installer verlangt einen Ort innerhalb `/etc/livescore` | `auth.yml` |
+| `auth.session_hours` | Session-Laufzeit ab Anmeldung | ganze Zahl 1–168 | `12` |
+| `auth.secure_cookie` | Cookies nur über HTTPS senden | `true` bei HTTPS, `false` für lokalen HTTP-Zugriff | `false` |
 
-Relative Daten- und Auth-Pfade beziehen sich auf das Verzeichnis der Config-Datei,
-nicht auf das Arbeitsverzeichnis. Als Legacy-Option ist `data_file` statt `data_dir`
-möglich; genau eine der beiden Optionen angeben. Das Elternverzeichnis der
-Legacy-Datei wird das Datenverzeichnis. [Migration und Dateiformat](DATA_MODEL.md#dateien-und-migration).
+Genau eine der Optionen `data_dir` oder `data_file` angeben. Unbekannte
+Schlüssel oder ungültige Werte führen zum Startabbruch.
+[Migration und Dateiformat](DATA_MODEL.md#dateien-und-migration).
+
+Nicht einstellbar: die Passwortlänge (12 bis 1024 Zeichen, fest im Programm;
+zentral konfigurierbar ist geplant, #12) und die beiden festen Konten `admin`
+und `operator`.
+
+### 4. Prioritäten
+
+- `livescore --config PFAD` auf der Kommandozeile hat Vorrang vor dem Pfad aus
+  `installation.json`; ohne beides gilt `config/livescore.yml` neben dem
+  Programm.
+- Relative Daten- und Auth-Pfade beziehen sich auf das Verzeichnis der
+  Config-Datei, nicht auf das Arbeitsverzeichnis.
+- Fehlt ein Schlüssel unter `auth`, gilt sein Standardwert aus Abschnitt 3.
+
+### 5. Einrichtung und Änderung
+
+Für die Installation `/etc/livescore/livescore.yml` bearbeiten, danach:
+
+```sh
+sudo systemctl restart livescore
+sudo journalctl -u livescore -n 100 --no-pager
+```
 
 Eine eigene Config kann beim manuellen Start angegeben werden:
 
@@ -171,18 +219,9 @@ Eine eigene Config kann beim manuellen Start angegeben werden:
 
 Genau einen Serverprozess pro Datenverzeichnis starten. Separate Instanzen
 benötigen getrennte Daten- und Auth-Dateien sowie Ports. JSON-Dateien nur bei
-beendetem Server manuell bearbeiten. Ungültige Konfiguration oder beschädigte
-vorhandene Daten führen zum Startabbruch und werden nicht durch Standarddaten ersetzt.
-
-Für die Installation `/etc/livescore/livescore.yml` bearbeiten, danach:
-
-```sh
-sudo systemctl restart livescore
-sudo journalctl -u livescore -n 100 --no-pager
-```
-
-Dieser Restart übernimmt Änderungen an der Serverkonfiguration.
-Für [Passwort-Recovery](#admin-passwort-vergessen) ist kein Neustart nötig.
+beendetem Server manuell bearbeiten; `auth.yml` nicht von Hand bearbeiten.
+Ungültige Konfiguration oder beschädigte vorhandene Daten führen zum Startabbruch
+und werden nicht durch Standarddaten ersetzt.
 
 Host und Port sind frei konfigurierbar. Der Installer unterstützt Datenpfade
 innerhalb `/var/lib/livescore/data` und Auth-Pfade innerhalb `/etc/livescore`.
@@ -203,6 +242,55 @@ verhindert die Prozesssperre eine zweite Instanz. Für normale Bedienung den
 Systemdienst verwenden. `livescore --config PFAD` ermöglicht einen ausdrücklich
 separaten manuellen Betrieb. `python -m livescore --version` funktioniert in der
 venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
+
+### 6. Wirksamkeit
+
+| Änderung | Wirksam |
+|---|---|
+| `livescore.yml`, alle Einstellungen einschließlich `auth.*` | nach `sudo systemctl restart livescore`; der Neustart beendet alle Sessions |
+| Passwort über `/users` | sofort; Sessions des betroffenen Kontos werden beendet |
+| Passwort über `sudo livescore --reset-admin-password` | ohne Neustart; die CLI fordert beim laufenden Dienst einen Reload der Zugangsdaten an (`systemctl reload livescore`), siehe [Admin-Passwort vergessen](#admin-passwort-vergessen) |
+| Veranstaltungsdaten über die Weboberfläche | sofort |
+
+### 7. Geheimnisse und Berechtigungen
+
+- `auth.yml` enthält nur scrypt-Hashes, keine Klartextpasswörter. Die Datei
+  entsteht beim ersten Serverstart mit den Startpasswörtern, siehe
+  [Benutzer und Passwörter](#benutzer-und-passwörter). Sie wird atomar geschrieben
+  und ist nur für ihren Eigentümer lesbar.
+- `/etc/livescore` und `/var/lib/livescore` haben den Modus `0750`,
+  `livescore.yml` `0640`; Eigentümer ist das Dienstkonto `livescore`. Der Dienst
+  darf in beide Verzeichnisse schreiben, weil er `auth.yml` und die
+  Veranstaltungsdaten pflegt.
+- Passwörter werden nur interaktiv abgefragt, nie als Argument übergeben.
+  Fehlermeldungen des Installers und des Auth-Reloads enthalten keine
+  Dateiinhalte oder Hashes.
+- Upgrade-Sicherungen unter `/var/lib/livescore/backups` enthalten
+  `auth.yml` und damit Passworthashes. Sie werden bisher nicht automatisch
+  begrenzt (geplant, #11); regelmäßig extern sichern und kontrolliert bereinigen.
+- `livescore --status` gibt keine Geheimnisse aus.
+
+### 8. Installation, Aktualisierung, Entfernen
+
+| Vorgang | Wirkung auf Konfiguration und Daten |
+|---|---|
+| Installation | legt `livescore.yml` nur an, wenn sie fehlt; `auth.yml` entsteht beim ersten Start; Seed nur bei leerem Datenverzeichnis, siehe [Erstinstallation](#erstinstallation) |
+| Upgrade | ersetzt keine Config; bricht ab, wenn `livescore.yml` oder bei aktivierter Anmeldung `auth.yml` fehlt; prüft Config, Zugangsdaten und Veranstaltungsdaten mit dem neuen Programm vor dem Umschalten; sichert Config und Daten nach `/var/lib/livescore/backups/`; ergänzt fehlende Standardprofile, siehe [Upgrade](#upgrade) |
+| Deinstallation | Config, Zugangsdaten, Veranstaltungsdaten, Backups und Dienstkonto bleiben, siehe [Deinstallation](#deinstallation) |
+| `--purge` | löscht zusätzlich `/etc/livescore` und `/var/lib/livescore` samt Backups, ohne Rückfrage (Rückfrage geplant, #14) |
+
+### 9. Prüfung und Fehlerdiagnose
+
+- `livescore --status` lädt `livescore.yml` mit demselben Parser wie der Server
+  und meldet eine ungültige Datei mit Exitcode 2; Einzelheiten und alle
+  Exitcodes unter [Erstinstallation](#erstinstallation). Ohne Leserecht nimmt
+  er die Installer-Standardwerte an und weist darauf hin.
+- `auth.yml` und die Veranstaltungsdaten prüft `--status` nicht. Das Upgrade
+  prüft sie vor dem Umschalten; ein ungültiger Stand bricht den Serverstart ab.
+- Eine eigene lesende Konfigurationsprüfung (`--check`) gibt es noch nicht (#6).
+- Ursache eines Startabbruchs: `sudo journalctl -u livescore -n 100 --no-pager`.
+- „läuft noch <Version>, Neustart nötig“ in `--status` bedeutet: Das Programm
+  wurde aktualisiert, der laufende Prozess aber nicht neu gestartet.
 
 ### HTTPS
 

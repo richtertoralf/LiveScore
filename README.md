@@ -84,6 +84,21 @@ Beim ersten Admin-Login führt LiveScore direkt zur Benutzerverwaltung:
 Passwörter liegen als Hashwerte in `/etc/livescore/auth.yml`; Wiederherstellung
 und HTTPS beschreibt [Installation und Betrieb](docs/INSTALLATION.md#benutzer-und-passwörter).
 
+## Konfiguration
+
+| Was | Linux-Dienst | Checkout | Ändern |
+|---|---|---|---|
+| Serverkonfiguration: Adresse, Port, Datenverzeichnis, Anmeldung | `/etc/livescore/livescore.yml` | `config/livescore.yml` | Datei bearbeiten, danach `sudo systemctl restart livescore` |
+| Passwörter (Hashes) | `/etc/livescore/auth.yml` | `config/auth.yml` | unter `/users` oder mit `sudo livescore --reset-admin-password`; nicht von Hand |
+| Veranstaltung, Sportprofil, Teilnehmer, Spiele | `/var/lib/livescore/data/` | `data/` | in der Weboberfläche, wirkt sofort |
+
+Prüfen: `livescore --status` zeigt die Pfade, lädt `livescore.yml` mit dem
+Parser des Servers und endet mit Exitcode 2, wenn sie ungültig ist. Upgrades
+ersetzen keine Konfiguration; die Deinstallation behält sie.
+
+Alle Einstellungen mit zulässigen Werten, Standardwerten, Wirksamkeit und Rechten:
+[Konfiguration](docs/INSTALLATION.md#konfiguration).
+
 ## Verwendung
 
 1. Unter **Veranstaltungen** eine Veranstaltung anlegen oder eine LiveScore-JSON-Datei
@@ -141,7 +156,7 @@ Details: [Installation und Betrieb](docs/INSTALLATION.md).
 
 ## Weiterführende Informationen
 
-- [Installation und Betrieb](docs/INSTALLATION.md): Windows-Start, Serverkonfiguration,
+- [Installation und Betrieb](docs/INSTALLATION.md): Windows-Start, Konfiguration,
   Passwörter, HTTPS, Upgrade, Backup und Deinstallation.
 - [Bedienungsanleitung](docs/OPERATOR.md): Vorbereitung und Einsatz am Wettkampftag.
 - [Sportprofile](docs/SPORT_PROFILES.md): Standardprofile, Erfassungsmodi und fachliche Grundlagen.

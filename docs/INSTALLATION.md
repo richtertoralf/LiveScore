@@ -277,7 +277,7 @@ venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
 | Installation | legt `livescore.yml` nur an, wenn sie fehlt; `auth.yml` entsteht beim ersten Start; Seed nur bei leerem Datenverzeichnis, siehe [Erstinstallation](#erstinstallation) |
 | Upgrade | ersetzt keine Config; bricht ab, wenn `livescore.yml` oder bei aktivierter Anmeldung `auth.yml` fehlt; prüft Config, Zugangsdaten und Veranstaltungsdaten mit dem neuen Programm vor dem Umschalten; sichert Config und Daten nach `/var/lib/livescore/backups/`; ergänzt fehlende Standardprofile, siehe [Upgrade](#upgrade) |
 | Deinstallation | Config, Zugangsdaten, Veranstaltungsdaten, Backups und Dienstkonto bleiben, siehe [Deinstallation](#deinstallation) |
-| `--purge` | löscht zusätzlich `/etc/livescore` und `/var/lib/livescore` samt Backups |
+| `--purge` | löscht zusätzlich `/etc/livescore` und `/var/lib/livescore` samt Backups, ohne Rückfrage (Rückfrage geplant, #14) |
 
 ### 9. Prüfung und Fehlerdiagnose
 

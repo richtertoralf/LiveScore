@@ -221,16 +221,25 @@ Keine Event-Sourcing-Architektur bauen, wenn eine kleine Ereignisliste den konkr
 
 ## Gemeinsame Regeln
 
-- Verwaltung: `livescore --help | --version | --status | --upgrade
-  [--source] | --check | --uninstall | --purge [--yes]`; Rückgabecodes 0/1/2.
-  `--purge` nur nach Bestätigung oder mit `--yes` (#14); Upgrade aus dem
-  Branch der Installation (#15).
-- Releases: Tag `vX.Y.Z` und GitHub Release auf `main`; nicht jeder Commit
-  ist ein Release.
-- Oberflächen: Login und Rollen bleiben; gemeinsame Token-Datei und
-  Statusfarben.
-- Read-API ohne Anmeldung, ohne Geheimnisse, ohne Nebenwirkungen.
-- Neue technische Bezeichner englisch.
+Gemeinsam beschlossene Regeln der Produktfamilie. **Heute** beschreibt den
+vorhandenen Stand, **Ziel** eine beschlossene, noch offene Umsetzung mit
+Issue. Ein Ziel ist kein Auftrag, es nebenbei oder im Vorgriff umzusetzen.
+
+- Verwaltung heute: `livescore --version | --status | --upgrade [--source]`,
+  Deinstallation mit `sudo ./uninstall.sh [--purge]`. Ziel: `--help`,
+  `--check` und `--uninstall [--purge]` im Kommando (#6), Purge nur nach
+  Rückfrage oder mit `--yes` (#14), Upgrade aus dem Branch der Installation
+  (#15).
+- Releases: Bei einem beauftragten Release erhält der `main`-Commit einen
+  unveränderlichen Tag `vX.Y.Z` und ein GitHub Release; nicht jeder Commit ist
+  ein Release. Versionsquelle und Badge ändern sich im selben Commit.
+  `--upgrade` darf weiterhin neue Commits des vorgesehenen Branches
+  übernehmen; `--version` nennt Version und Commit.
+- Oberflächen heute: Login und Rollen. Ziel: gemeinsame Token-Datei und
+  Statusfarben (#13).
+- Die Read-API bleibt ohne Anmeldung, ohne Geheimnisse, ohne Nebenwirkungen.
+- Neue technische Bezeichner englisch; vorhandene deutsche Bezeichner nur in
+  getesteten Überarbeitungen umbenennen, keine Massenumbenennung.
 
 ## Arbeitsweise
 

@@ -12,8 +12,12 @@ import time
 from urllib.request import urlopen
 
 from playwright.async_api import async_playwright, expect
+import yaml
+
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from livescore.auth import hash_password  # noqa: E402
 ARTIFACTS=ROOT/'.test-artifacts'
 PASSWORD='Local test password 2026!'
 
@@ -26,6 +30,8 @@ async def run(executable):
         url=f'http://127.0.0.1:{port}'
         config=directory/'server.yml'
         config.write_text(f'bind_host: 127.0.0.1\nport: {port}\ndata_dir: data\nauth:\n  enabled: true\n  file: auth.yml\n')
+        # Bestandsinstallation mit Startpasswörtern; seit #18 legt der Dienst keine Konten an.
+        (directory/'auth.yml').write_text(yaml.safe_dump(dict(users={name:dict(role=name,password_hash=hash_password(name),default_password=True) for name in ('admin','operator')})))
         environment=dict(os.environ,TMPDIR=str(directory),XDG_CACHE_HOME=str(directory/'cache'),XDG_CONFIG_HOME=str(directory/'config'))
         log=(ARTIFACTS/'browser-auth-server.log').open('w')
         process=None

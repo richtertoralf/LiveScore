@@ -4,9 +4,9 @@ import secrets
 from urllib.parse import urlsplit
 
 from fastapi import Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
-from .auth import COOKIE, LOGIN_COOKIE, Login, PasswordChange
+from .auth import COOKIE, LOGIN_COOKIE, RESET_COMMAND, USERS, Login, PasswordChange
 
 
 def error(code, status):
@@ -33,6 +33,12 @@ def install_auth(app, root):
         request.state.session = session
         if not auth.config.enabled or public:
             return await call_next(request)
+        if auth.locked:
+            # Fail closed nur für angemeldete Bereiche; Live-API und statische Dateien bleiben.
+            text = f'LiveScore-Anmeldung gesperrt: {auth.locked_reason}. Einrichten: {RESET_COMMAND}'
+            if request.method == 'GET' and not path.startswith('/api/'):
+                return PlainTextResponse(text, status_code=503)
+            return JSONResponse({'detail': 'auth_locked', 'message': text}, status_code=503)
         if not session:
             if request.method == 'GET' and not path.startswith('/api/'):
                 return RedirectResponse('/login', status_code=303)
@@ -84,6 +90,8 @@ def install_auth(app, root):
         if not csrf or not cookie or not hmac.compare_digest(csrf.encode(), cookie.encode()) or (request.headers.get('origin') and not same_origin(request)):
             return error('csrf_invalid', 403)
         outcome, sid = await auth.login(command.username, command.password.get_secret_value())
+        if outcome == 'locked':
+            return error('auth_locked', 503)
         if outcome != 'ok':
             return error('login_limited' if outcome == 'limited' else 'login_invalid', 429 if outcome == 'limited' else 401)
         old = request.cookies.get(COOKIE)
@@ -104,8 +112,13 @@ def install_auth(app, root):
     @app.get('/api/auth/users')
     async def users():
         auth = app.state.auth
-        return {'users': [{'username': name, 'role': user.role, 'default_password': user.default_password}
-                          for name, user in auth.credentials.users.items()] if auth.config.enabled else []}
+        if not auth.config.enabled:
+            return {'users': []}
+        # Beide festen Konten, auch ein noch nicht eingerichtetes: Der Admin kann es hier anlegen.
+        present = auth.credentials.users
+        return {'users': [{'username': name, 'role': name, 'configured': name in present,
+                           'default_password': name in present and present[name].default_password}
+                          for name in USERS]}
 
     @app.post('/api/auth/password')
     async def password(request: Request, command: PasswordChange):

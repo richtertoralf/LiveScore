@@ -24,7 +24,8 @@ class VersionTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json(), {'version': __version__})
                 self.assertEqual(response.headers['cache-control'], 'no-store')
-                self.assertEqual(client.post('/api/version').status_code, 401)
+                # Ohne Kontendatei ist die Anmeldung gesperrt (503); GET bleibt öffentlich.
+                self.assertEqual(client.post('/api/version').status_code, 503)
 
     def test_cli_and_python_use_changed_central_version(self):
         with tempfile.TemporaryDirectory(dir=ROOT / '.test-artifacts') as temp:

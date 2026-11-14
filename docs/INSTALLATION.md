@@ -254,10 +254,10 @@ venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
 
 ### 7. Geheimnisse und Berechtigungen
 
-- `auth.yml` enthält nur scrypt-Hashes, keine Klartextpasswörter. Die Datei
-  entsteht beim ersten Serverstart mit den Startpasswörtern, siehe
-  [Benutzer und Passwörter](#benutzer-und-passwörter). Sie wird atomar geschrieben
-  und ist nur für ihren Eigentümer lesbar.
+- `auth.yml` enthält nur scrypt-Hashes, keine Klartextpasswörter. Der Installer
+  legt sie bei der Erstinstallation mit je einem Zufallspasswort für `admin` und
+  `operator` an, siehe [Benutzer und Passwörter](#benutzer-und-passwörter). Sie
+  wird atomar geschrieben und ist nur für ihren Eigentümer lesbar.
 - `/etc/livescore` und `/var/lib/livescore` haben den Modus `0750`,
   `livescore.yml` `0640`; Eigentümer ist das Dienstkonto `livescore`. Der Dienst
   darf in beide Verzeichnisse schreiben, weil er `auth.yml` und die
@@ -274,8 +274,8 @@ venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
 
 | Vorgang | Wirkung auf Konfiguration und Daten |
 |---|---|
-| Installation | legt `livescore.yml` nur an, wenn sie fehlt; `auth.yml` entsteht beim ersten Start; Seed nur bei leerem Datenverzeichnis, siehe [Erstinstallation](#erstinstallation) |
-| Upgrade | ersetzt keine Config; bricht ab, wenn `livescore.yml` oder bei aktivierter Anmeldung `auth.yml` fehlt; prüft Config, Zugangsdaten und Veranstaltungsdaten mit dem neuen Programm vor dem Umschalten; sichert Config und Daten nach `/var/lib/livescore/backups/`; ergänzt fehlende Standardprofile, siehe [Upgrade](#upgrade) |
+| Installation | legt `livescore.yml` und `auth.yml` nur an, wenn sie fehlen (Zufallspasswörter, einmal angezeigt); Seed nur bei leerem Datenverzeichnis, siehe [Erstinstallation](#erstinstallation) |
+| Upgrade | ersetzt keine Config; bricht ab, wenn `livescore.yml` fehlt; ändert `auth.yml` nie und meldet eine fehlende oder unbrauchbare Datei als Hinweis; prüft Config und Veranstaltungsdaten mit dem neuen Programm vor dem Umschalten; sichert Config und Daten nach `/var/lib/livescore/backups/`; ergänzt fehlende Standardprofile, siehe [Upgrade](#upgrade) |
 | Deinstallation | Config, Zugangsdaten, Veranstaltungsdaten, Backups und Dienstkonto bleiben, siehe [Deinstallation](#deinstallation) |
 | `--purge` | löscht zusätzlich `/etc/livescore` und `/var/lib/livescore` samt Backups, ohne Rückfrage (Rückfrage geplant, #14) |
 
@@ -286,7 +286,9 @@ venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
   Exitcodes unter [Erstinstallation](#erstinstallation). Ohne Leserecht nimmt
   er die Installer-Standardwerte an und weist darauf hin.
 - `auth.yml` und die Veranstaltungsdaten prüft `--status` nicht. Das Upgrade
-  prüft sie vor dem Umschalten; ein ungültiger Stand bricht den Serverstart ab.
+  prüft die Veranstaltungsdaten vor dem Umschalten. Eine fehlende oder
+  unbrauchbare `auth.yml` sperrt nur die Anmeldung, siehe
+  [Benutzer und Passwörter](#benutzer-und-passwörter).
 - Eine eigene lesende Konfigurationsprüfung (`--check`) gibt es noch nicht (#6).
 - Ursache eines Startabbruchs: `sudo journalctl -u livescore -n 100 --no-pager`.
 - „läuft noch <Version>, Neustart nötig“ in `--status` bedeutet: Das Programm
@@ -294,7 +296,7 @@ venv ebenfalls; beide CLI-Varianten und die Web-API lesen `VERSION`.
 
 ### HTTPS
 
-Vor Internetfreigabe beide Startpasswörter ändern, HTTPS über einen Reverse Proxy
+Vor Internetfreigabe noch aktive Startpasswörter älterer Installationen ändern, HTTPS über einen Reverse Proxy
 einrichten und `auth.secure_cookie: true` setzen. Nur den HTTPS-Zugang öffentlich
 erreichbar machen; den LiveScore-Port nicht direkt freigeben.
 Bei einem Proxy auf demselben Rechner kann LiveScore an `127.0.0.1` gebunden werden.
@@ -307,23 +309,38 @@ TLS, Zertifikate und Firewall richtet der Betreiber ein.
 
 ## Benutzer und Passwörter
 
-| Benutzer | Startpasswort | Berechtigung |
-|---|---|---|
-| `operator` | `operator` | Bestehende Veranstaltungsdetails bearbeiten, auswählen, exportieren und Spiele bedienen |
-| `admin` | `admin` | zusätzlich Passwörter verwalten und Veranstaltungen zurücksetzen/ersetzen |
+| Benutzer | Berechtigung |
+|---|---|
+| `operator` | Bestehende Veranstaltungsdetails bearbeiten, auswählen, exportieren und Spiele bedienen |
+| `admin` | zusätzlich Passwörter verwalten und Veranstaltungen zurücksetzen/ersetzen |
 
-Beim ersten Admin-Login führt LiveScore zu `/users`. Zuerst das eigene Passwort
-ändern, danach das Operator-Passwort setzen. Neue Passwörter müssen 12–1024 Zeichen
+Der Installer legt beide Konten mit je einem Zufallspasswort (20 Zeichen) an und
+zeigt sie einmal an. Es gibt kein festes Startpasswort. Installationen älterer
+Versionen behalten ihre Passwörter; ein noch aktives Startpasswort
+(`admin`/`admin`, `operator`/`operator`) bleibt gültig, bis es geändert wird.
+Log und `/users` weisen darauf hin; ein Admin mit Startpasswort wird wie bisher
+zuerst zu `/users` geführt. Neue Passwörter müssen 12–1024 Zeichen
 lang sein und werden zweimal eingegeben. Das alte Passwort ist nicht erforderlich.
 Operatoren ändern ihr Passwort über den Admin. Weitere Benutzer oder Rollen
 können nicht angelegt werden.
 
 Passwortänderungen melden alle Sessions des betroffenen Accounts ab.
 Ein Serverneustart beendet alle Sessions, erhält aber Passwörter und Veranstaltungsdaten.
-Die Passwortdatei enthält scrypt-Hashes und wird beim ersten Start angelegt;
-sie nicht von Hand bearbeiten. Im Checkout liegt sie unter `config/auth.yml`.
-Fehlende oder ungültige Accounts in einer vorhandenen Datei führen zum Startabbruch,
-nicht zum Zurücksetzen auf Startpasswörter.
+Die Passwortdatei enthält scrypt-Hashes; sie nicht von Hand bearbeiten. Im
+Checkout liegt sie unter `config/auth.yml`. Der Dienst legt keine Konten an und
+schreibt die Datei beim Start nie neu.
+
+- **Datei fehlt, ist leer, unlesbar oder ohne gültiges Konto:** Der Dienst startet
+  trotzdem. Nur die Anmeldung ist gesperrt (HTTP 503 mit Hinweis auf
+  `sudo livescore --reset-admin-password`). `GET /api/v1/live`,
+  `GET /api/version` und laufende Anzeigen bleiben verfügbar. Fehlt die Datei,
+  legt der Reset sie mit dem Konto `admin` an; das Operator-Konto richtet der
+  Admin danach unter `/users` ein.
+- **Einzelne ungültige oder unbekannte Einträge:** werden ignoriert und im Log
+  genannt. Die nächste Passwortänderung sichert die Datei vorher als
+  `auth.yml.defekt-<Zeitstempel>` und nennt die nicht übernommenen Einträge.
+- **Reload im Betrieb:** Fehlt dabei ein bisher gültiges Konto oder ist die
+  Datei unbrauchbar, bleibt der bisherige Stand samt Sessions aktiv.
 
 Die Live-Daten unter `GET /api/v1/live` bleiben öffentlich lesbar.
 Die übrigen fachlichen APIs und der WebSocket verlangen bei aktiviertem Auth
@@ -402,8 +419,9 @@ Ablauf:
 1. Installierte Version und Zielversion nennen; Installation exklusiv sperren.
 2. Neue Programmdateien und neue venv neben der bisherigen Laufzeit anlegen.
 3. Requirements installieren, `pip check`, Python-Kompilation und Seedvalidierung.
-4. Vorhandene Config/Auth/Eventdateien lesend validieren. Fehlende Auth-Datei bei
-   aktiviertem Auth führt zum Abbruch, statt neue Startpasswörter zu erzeugen.
+4. Vorhandene Config- und Eventdateien lesend validieren. `auth.yml` wird nie
+   geändert; fehlt sie oder ist sie unbrauchbar, nennt das Upgrade den Reset-Befehl
+   und fährt fort (nur die Anmeldung ist gesperrt).
 5. Eigenen Dienst stoppen und Config/Auth sowie alle Veranstaltungsdaten sichern.
 6. `current` atomar umschalten, Unit aktualisieren, einen zuvor laufenden Dienst neu
    starten und öffentliche Versionsantwort sowie systemd-Status prüfen. Ein gestoppter

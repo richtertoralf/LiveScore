@@ -1,4 +1,9 @@
-"""Zwei lokale Accounts, atomare Hash-Datei und flüchtige Sessions."""
+"""Zwei lokale Accounts, atomare Hash-Datei und flüchtige Sessions.
+
+Der Dienst legt keine Konten an und schreibt die Datei beim Start nie neu.
+Fehlt sie oder ist sie unbrauchbar, ist nur die Anmeldung gesperrt (#18, #19);
+Live-API und Anzeigen laufen weiter. Meldungen nennen nie Hashes (#22).
+"""
 import argparse
 import asyncio
 from collections import deque
@@ -11,6 +16,7 @@ import logging
 import os
 from pathlib import Path
 import secrets
+import shutil
 import time
 from typing import Literal
 
@@ -21,6 +27,7 @@ from .models import Model
 from .storage import atomic_write, FileLease
 
 USERS = ('admin', 'operator')
+RESET_COMMAND = 'sudo livescore --reset-admin-password'
 COOKIE = 'livescore_session'
 LOGIN_COOKIE = 'livescore_login'
 # OWASP scrypt alternative: N=2^15, r=8, p=3 (32 MiB per running KDF).
@@ -73,9 +80,49 @@ class Credentials(Model):
 
     @model_validator(mode='after')
     def fixed_users(self):
-        if set(self.users) != set(USERS) or any(self.users[name].role != name for name in USERS):
-            raise ValueError('Exactly admin and operator with their fixed roles are required.')
+        # Ein fehlendes Konto richtet der Admin in der Oberfläche oder per Reset ein.
+        if not self.users or not set(self.users) <= set(USERS) or any(self.users[name].role != name for name in self.users):
+            raise ValueError('Only admin and operator with their fixed roles are supported.')
         return self
+
+
+def parse_credentials(text):
+    """Gültige Konten und Namen nicht übernommener Einträge.
+
+    Meldungen nennen nur Namen, nie Werte: Pydantic-Fehler enthielten sonst
+    Teile von password_hash (#22).
+    """
+    raw = yaml.safe_load(text)
+    if not isinstance(raw, dict) or not isinstance(raw.get('users'), dict):
+        raise ValueError('ohne users-Abschnitt')
+    users, ignored = {}, [str(key) for key in raw if key != 'users']
+    for name, value in raw['users'].items():
+        try:
+            if name not in USERS:
+                raise ValueError(name)
+            user = User.model_validate(value)
+            if user.role != name:
+                raise ValueError(name)
+        except ValueError:
+            ignored.append(f'users.{name}')
+            continue
+        users[name] = user
+    if not users:
+        raise ValueError('ohne gültiges Konto')
+    return Credentials(users=users), ignored
+
+
+def unusable_reason(error):
+    """Grund ohne Dateiinhalt; YAML-Fehler zitieren sonst Zeilen der Datei."""
+    if isinstance(error, FileNotFoundError):
+        return 'fehlt'
+    if isinstance(error, OSError):
+        return 'nicht lesbar'
+    if isinstance(error, yaml.YAMLError):
+        return 'kein gültiges YAML'
+    if isinstance(error, RuntimeError):
+        return 'gesperrt'
+    return str(error)  # nur eigene Meldungen aus parse_credentials
 
 
 class Login(Model):
@@ -96,8 +143,8 @@ def credentials_lock(path):
     lease.acquire(blocking=True)
     try:
         # sudo recovery must not leave a newly created lock owned only by root.
-        if os.name != 'nt' and path.exists() and os.geteuid() == 0:
-            owner = path.stat()
+        if os.name != 'nt' and os.geteuid() == 0:
+            owner = (path if path.exists() else path.parent).stat()
             os.fchown(lease.file.fileno(), owner.st_uid, owner.st_gid)
         yield
     finally:
@@ -105,30 +152,68 @@ def credentials_lock(path):
 
 
 def read_credentials(path):
-    """Caller holds credentials_lock. Reload/update deliberately validate strictly."""
-    return Credentials.model_validate(yaml.safe_load(path.read_text(encoding='utf-8')))
+    """Caller holds credentials_lock. Returns (credentials, ignored entry names)."""
+    return parse_credentials(path.read_text(encoding='utf-8'))
 
 
 def save_credentials(path, credentials):
     """Caller holds credentials_lock; keep service-account ownership after sudo."""
     checked = Credentials.model_validate(credentials.model_dump())
+    created = not path.exists()
     atomic_write(path, yaml.safe_dump(checked.model_dump(), sort_keys=False), preserve_owner=True)
+    if created and os.name != 'nt' and os.geteuid() == 0:
+        # Neu angelegt mit sudo: Eigentümer wie das Config-Verzeichnis (Dienstkonto).
+        owner = path.parent.stat()
+        os.chown(path, owner.st_uid, owner.st_gid)
 
 
-def load_credentials(path):
+def backup_file(path):
+    """Kopie vor einer Änderung, die Einträge nicht übernimmt; gleiche Rechte."""
+    target = path.with_name(f'{path.name}.defekt-{time.strftime("%Y%m%d-%H%M%S")}')
+    while target.exists():
+        target = target.with_name(target.name + '-1')
+    shutil.copy2(path, target)
+    if os.name != 'nt' and os.geteuid() == 0:
+        owner = path.stat()
+        os.chown(target, owner.st_uid, owner.st_gid)
+    return target
+
+
+def load_credentials_report(path):
+    """(credentials, ignored entry names) under the shared lock."""
     with credentials_lock(path):
         return read_credentials(path)
 
 
-def update_password(path, username, encoded, expected_admin_hash=None):
-    """Read-modify-write on the latest disk state, never a stale RAM snapshot."""
+def load_credentials(path):
+    return load_credentials_report(path)[0]
+
+
+def update_password(path, username, encoded, expected_admin_hash=None, create=False):
+    """Read-modify-write on the latest disk state, never a stale RAM snapshot.
+
+    Returns (credentials, accepted, notes). Nicht übernommene Einträge werden
+    vorher gesichert und genannt; nichts verschwindet stillschweigend.
+    """
+    notes = []
     with credentials_lock(path):
-        current = read_credentials(path)
-        if expected_admin_hash is not None and current.users['admin'].password_hash != expected_admin_hash:
-            return current, False  # Recovery revoked this web request's authority.
-        current.users[username] = User(role=username, password_hash=encoded, default_password=False)
-        save_credentials(path, current)
-        return current, True
+        if create and not path.exists():
+            users, ignored = {}, []
+            notes.append(f'{path.name} angelegt.')
+        else:
+            current, ignored = read_credentials(path)
+            users = dict(current.users)
+        admin = users.get('admin')
+        if expected_admin_hash is not None and (admin is None or admin.password_hash != expected_admin_hash):
+            return Credentials(users=users), False, notes  # Recovery revoked this web request's authority.
+        if ignored:
+            backup = backup_file(path)
+            notes.append(f'Nicht übernommen: {", ".join(ignored)}; gesichert in {backup}.')
+            logging.warning('Auth-Datei: nicht übernommen: %s; gesichert in %s', ', '.join(ignored), backup)
+        users[username] = User(role=username, password_hash=encoded, default_password=False)
+        updated = Credentials(users=users)
+        save_credentials(path, updated)
+        return updated, True, notes
 
 
 @dataclass
@@ -146,38 +231,55 @@ class Auth:
         self.login_lock = asyncio.Lock()
         self.attempts = deque()
         self.credentials = None
+        self.locked_reason = None
         if config.enabled:
-            with credentials_lock(config.file):
-                if config.file.exists():
-                    raw = yaml.safe_load(config.file.read_text())
-                    if not isinstance(raw, dict) or not isinstance(raw.get('users'), dict):
-                        raise ValueError('Auth configuration requires a users mapping.')
-                    # Startup compatibility only; hot reload never rewrites the file.
-                    current = {'users': {name: raw['users'].get(name) for name in USERS}}
-                    self.credentials = Credentials.model_validate(current)
-                    if raw != self.credentials.model_dump():
-                        save_credentials(config.file, self.credentials)
-                else:
-                    self.credentials = Credentials(users={name: User(role=name, password_hash=hash_password(name)) for name in USERS})
-                    save_credentials(config.file, self.credentials)
             self.dummy_hash = hash_password(secrets.token_urlsafe(32))
+            try:
+                candidate, ignored = load_credentials_report(config.file)
+            except (OSError, ValueError, RuntimeError, yaml.YAMLError) as error:
+                # Nur die Anmeldung ist gesperrt; Live-API und Anzeigen laufen weiter.
+                self.locked_reason = f'{config.file.name} {unusable_reason(error)}'
+                logging.error('LiveScore-Anmeldung gesperrt: %s. Einrichten: %s', self.locked_reason, RESET_COMMAND)
+            else:
+                self.adopt(candidate, ignored)
 
-    def adopt(self, candidate):
-        changed = {name for name in USERS if self.credentials.users[name] != candidate.users[name]}
+    @property
+    def locked(self):
+        return self.config.enabled and self.credentials is None
+
+    def adopt(self, candidate, ignored=()):
+        before = self.credentials.users if self.credentials else {}
+        changed = {name for name in USERS if before.get(name) != candidate.users.get(name)}
         self.credentials = candidate
+        self.locked_reason = None
         self.sessions = {sid: session for sid, session in self.sessions.items() if session.username not in changed}
+        if ignored:
+            logging.warning('Auth-Datei: Einträge ignoriert (Datei unverändert): %s', ', '.join(ignored))
+        missing = [name for name in USERS if name not in candidate.users]
+        if missing:
+            logging.warning('Konto nicht eingerichtet: %s. Einrichten unter /users oder: %s', ', '.join(missing), RESET_COMMAND)
+        defaults = [name for name, user in candidate.users.items() if user.default_password]
+        if defaults:
+            logging.warning('Startpasswort noch aktiv: %s. Unter /users ändern.', ', '.join(defaults))
 
     async def reload(self):
         if not self.config.enabled:
             return False
         async with self.lock:
             try:
-                candidate = await asyncio.to_thread(load_credentials, self.config.file)
-            except (OSError, ValueError, RuntimeError, yaml.YAMLError):
+                candidate, ignored = await asyncio.to_thread(load_credentials_report, self.config.file)
+            except (OSError, ValueError, RuntimeError, yaml.YAMLError) as error:
                 # Do not log validation details: they may contain password hashes.
-                logging.error('Auth reload rejected; retaining previous credentials and sessions.')
+                logging.error('Auth reload rejected (%s); retaining previous credentials and sessions.',
+                              unusable_reason(error))
                 return False
-            self.adopt(candidate)
+            lost = [name for name in (self.credentials.users if self.credentials else {}) if name not in candidate.users]
+            if lost:
+                # Ein fehlerhaft bearbeitetes Konto darf laufende Bedienung nicht aussperren.
+                logging.error('Auth reload rejected (account missing or invalid: %s); '
+                              'retaining previous credentials and sessions.', ', '.join(lost))
+                return False
+            self.adopt(candidate, ignored)
             logging.getLogger('uvicorn.error').info('LiveScore authentication reloaded without restart.')
             return True
 
@@ -198,18 +300,21 @@ class Auth:
         return sid
 
     def restricted(self, session):
-        return session.username == 'admin' and self.credentials.users['admin'].default_password
+        admin = self.credentials.users.get('admin') if self.credentials else None
+        return session.username == 'admin' and admin is not None and admin.default_password
 
     def public(self, session):
         if not self.config.enabled:
             return dict(enabled=False, authenticated=True, username=None, role='admin', csrf_token='', must_change_password=False, defaults=[])
         if not session:
-            return dict(enabled=True, authenticated=False)
+            return dict(enabled=True, authenticated=False, locked=self.locked)
         defaults = [name for name, user in self.credentials.users.items() if user.default_password] if session.username == 'admin' else []
         return dict(enabled=True, authenticated=True, username=session.username, role=session.username,
                     csrf_token=session.csrf, must_change_password=self.restricted(session), defaults=defaults)
 
     async def login(self, username, password):
+        if self.locked:
+            return 'locked', None
         # Global limit works even behind a proxy without trusting forwarded client IPs.
         now = time.monotonic()
         while self.attempts and self.attempts[0] < now-300:
@@ -222,7 +327,8 @@ class Auth:
             encoded = user.password_hash if user else self.dummy_hash
             good = await asyncio.to_thread(verify_password, password, encoded)
             # A reset during KDF verification must not create a session with an old password.
-            if not good or not user or self.credentials.users[username].password_hash != encoded:
+            current = self.credentials.users.get(username)
+            if not good or not user or current is None or current.password_hash != encoded:
                 return 'invalid', None
             return 'ok', self.new_session(username)
 
@@ -246,9 +352,9 @@ class Auth:
                 command.username, encoded, self.credentials.users['admin'].password_hash))
             cancelled = False
             try:
-                candidate, accepted = await asyncio.shield(task)
+                candidate, accepted, _notes = await asyncio.shield(task)
             except asyncio.CancelledError:
-                candidate, accepted = await task
+                candidate, accepted, _notes = await task
                 cancelled = True
             self.adopt(candidate)
             if cancelled:
@@ -258,10 +364,32 @@ class Auth:
         return None
 
 
+def create_accounts(path):
+    """Erstinstallation: beide Konten mit je eigenem Zufallspasswort, einmal angezeigt (#18)."""
+    with credentials_lock(path):
+        if path.exists():
+            print(f'{path} vorhanden; Konten bleiben unverändert.')
+            return 0
+        passwords = {name: secrets.token_urlsafe(15) for name in USERS}  # 20 Zeichen
+        save_credentials(path, Credentials(users={
+            name: User(role=name, password_hash=hash_password(password), default_password=False)
+            for name, password in passwords.items()}))
+    print('LiveScore-Konten angelegt. Passwörter werden nur jetzt angezeigt:')
+    for name, password in passwords.items():
+        print(f'  {name}: {password}')
+    print(f'Ändern: im Browser unter /users oder mit {RESET_COMMAND}')
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description='LiveScore password hash helper')
-    parser.add_argument('command', choices=['hash-password'])
-    parser.parse_args()
+    parser.add_argument('command', choices=['hash-password', 'create-accounts'])
+    parser.add_argument('--file', type=Path, help='auth.yml für create-accounts')
+    args = parser.parse_args()
+    if args.command == 'create-accounts':
+        if not args.file:
+            parser.error('create-accounts braucht --file.')
+        raise SystemExit(create_accounts(args.file))
     password = getpass.getpass('Password: ')
     if len(password) < 12 or len(password) > 1024:
         parser.error('Use 12–1024 characters.')

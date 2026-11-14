@@ -7,7 +7,7 @@ import sys
 
 import yaml
 
-from .auth import Credentials
+from .auth import parse_credentials, unusable_reason
 from .catalog import Selection, save_selection
 from .config import load_config
 from .models import State
@@ -15,11 +15,19 @@ from .profiles import ProfileLibrary, provision_profiles
 from .storage import FileLease, load, save
 
 
+def auth_state(config):
+    """Nur lesen: Eine unbrauchbare Kontendatei sperrt die Anmeldung, nicht den Dienst."""
+    if not config.auth.enabled:
+        return 'abgeschaltet'
+    try:
+        parse_credentials(config.auth.file.read_text(encoding='utf-8'))
+    except (OSError, ValueError, yaml.YAMLError) as error:
+        return f'gesperrt: {config.auth.file.name} {unusable_reason(error)}'
+    return 'eingerichtet'
+
+
 def inspect_config(path):
     config = load_config(path)
-    if config.auth.file.exists():
-        # Read-only validation: do not initialize/reset accounts in an upgrade check.
-        Credentials.model_validate(yaml.safe_load(config.auth.file.read_text()))
     for event in (config.data_dir / 'events').glob('*.json'):
         load(event)
     library = config.data_dir / 'sport-profiles.json'
@@ -89,7 +97,7 @@ def main():
             config = inspect_config(args.config)
             print(json.dumps(dict(bind_host=config.bind_host, port=config.port,
                                  data_dir=str(config.data_dir), auth_file=str(config.auth.file),
-                                 auth_enabled=config.auth.enabled)))
+                                 auth_enabled=config.auth.enabled, auth_state=auth_state(config))))
     except (ValueError, OSError, RuntimeError, yaml.YAMLError):
         print('Config/Auth/Veranstaltungsdaten ungültig oder gesperrt; unverändert abgebrochen.', file=sys.stderr)
         raise SystemExit(1)

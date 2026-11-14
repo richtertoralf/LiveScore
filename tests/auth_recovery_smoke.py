@@ -21,7 +21,10 @@ import httpx
 import yaml
 from websockets.sync.client import connect
 
+
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from livescore.auth import hash_password  # noqa: E402
 ARTIFACTS = ROOT / '.test-artifacts'
 PASSWORD = 'Recovered administrator password 2026!'
 ORIGINAL_PASSWORD = 'Original administrator password 2026!'
@@ -47,7 +50,7 @@ def interactive_reset(config, environment):
         process.wait(timeout=2)
         assert process.returncode==0,output.decode()
         assert answered==2 and PASSWORD.encode() not in output, 'Hidden getpass input required'
-        assert b'Admin password updated.' in output and b'No restart was required.' in output
+        assert b'Admin password updated in ' in output and b'No restart was required.' in output
         return output.decode()
     finally:
         os.close(master)
@@ -63,6 +66,8 @@ def run():
         url=f'http://127.0.0.1:{port}'
         config=directory/'server.yml'
         config.write_text(f'bind_host: 127.0.0.1\nport: {port}\ndata_dir: data\nauth:\n  file: auth.yml\n')
+        # Bestandsinstallation mit Startpasswörtern; seit #18 legt der Dienst keine Konten an.
+        (directory/'auth.yml').write_text(yaml.safe_dump(dict(users={name:dict(role=name,password_hash=hash_password(name),default_password=True) for name in ('admin','operator')})))
         subprocess.run([sys.executable,'-m','livescore.bootstrap','--config',str(config),
                         '--seed',str(ROOT/'imports/prague-2026.json')],cwd=ROOT,check=True,capture_output=True)
         environment=dict(os.environ,TMPDIR=str(directory))

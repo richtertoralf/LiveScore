@@ -1,5 +1,6 @@
 """Real staged lifecycle with shared test venv; no systemd or host writes."""
 import asyncio
+import io
 import json
 import os
 from pathlib import Path
@@ -78,9 +79,13 @@ class DeploymentTest(unittest.TestCase):
             catalog = client.app.state.service
             self.assertEqual(catalog.selection.active_event_id,'prague-2026')
             self.assertEqual(len(catalog.state.matches),14)
+            # Je eigenes Zufallspasswort statt Benutzername als Startpasswort (#18).
             for name in ('admin','operator'):
-                self.assertTrue(verify_password(name,client.app.state.auth.credentials.users[name].password_hash))
+                user = client.app.state.auth.credentials.users[name]
+                self.assertFalse(verify_password(name,user.password_hash))
+                self.assertFalse(user.default_password)
         self.assertTrue(config.auth.file.exists())
+        self.assertEqual(config.auth.file.stat().st_mode & 0o777,0o600)
 
     def test_upgrade_preserves_config_passwords_active_event_and_scores(self):
         config = self.install()
@@ -165,21 +170,24 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(self.deployment.current.resolve(),old)
         self.assertEqual(self.snapshot(),before)
 
-    def test_invalid_auth_upgrade_aborts_without_replacing_it(self):
+    def test_invalid_auth_upgrade_keeps_file_and_only_locks_login(self):
         config=self.install(); config.auth.file.write_text('invalid: config')
         old=self.deployment.current.resolve(); before=self.snapshot()
-        with self.assertRaises(subprocess.CalledProcessError): self.deployment.deploy(ROOT,upgrade=True)
+        with patch('sys.stdout',new_callable=io.StringIO) as output:
+            self.deployment.deploy(ROOT,upgrade=True)
+        self.assertIn('Anmeldung gesperrt: auth.yml',output.getvalue())
         self.assertEqual(self.snapshot(),before)
-        self.assertEqual(self.deployment.current.resolve(),old)
+        self.assertNotEqual(self.deployment.current.resolve(),old)
 
     def test_missing_auth_upgrade_never_generates_initial_passwords(self):
         config=self.install()
-        self.assertFalse(config.auth.file.exists())
+        config.auth.file.unlink()
         old=self.deployment.current.resolve()
-        with self.assertRaisesRegex(RuntimeError,'Auth-Datei fehlt'):
+        with patch('sys.stdout',new_callable=io.StringIO) as output:
             self.deployment.deploy(ROOT,upgrade=True)
+        self.assertIn('sudo livescore --reset-admin-password',output.getvalue())
         self.assertFalse(config.auth.file.exists())
-        self.assertEqual(self.deployment.current.resolve(),old)
+        self.assertNotEqual(self.deployment.current.resolve(),old)
 
     def test_service_stop_restart_and_rollback_sequence(self):
         config=self.install(); Auth(config.auth)

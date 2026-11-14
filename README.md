@@ -72,14 +72,19 @@ siehe [Installation und Betrieb](docs/INSTALLATION.md).
 
 ### Erste Anmeldung und sichere Einrichtung
 
-Jede neue Installation startet mit den allgemein bekannten Zugängen
-**admin / admin** (Administration) und **operator / operator** (Bedienung).
-Beim ersten Admin-Login führt LiveScore direkt zur Benutzerverwaltung:
+Es gibt kein festes Startpasswort. Der Installer legt die Konten **admin**
+(Administration) und **operator** (Bedienung) mit je einem Zufallspasswort an
+und zeigt beide einmal an. Beim manuellen Start im Checkout die Konten vorher
+anlegen:
 
-1. Zuerst das eigene Admin-Passwort ändern.
-2. Danach das Operator-Passwort setzen. Neue Passwörter haben 12 bis 1024 Zeichen.
-3. Erst danach weitere Geräte im Netz anmelden. Für einen Zugang aus dem
-   Internet zusätzlich HTTPS einrichten.
+```sh
+.venv/bin/python -m livescore.auth create-accounts --file config/auth.yml
+```
+
+Ohne Kontendatei läuft LiveScore, aber die Anmeldung ist gesperrt; die
+Live-Daten bleiben lesbar. Passwörter ändert der Admin unter `/users`
+(12 bis 1024 Zeichen). Für einen Zugang aus dem Internet zusätzlich HTTPS
+einrichten.
 
 Passwörter liegen als Hashwerte in `/etc/livescore/auth.yml`; Wiederherstellung
 und HTTPS beschreibt [Installation und Betrieb](docs/INSTALLATION.md#benutzer-und-passwörter).

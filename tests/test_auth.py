@@ -1,4 +1,5 @@
 """Zugriffsschutz mit echten scrypt-Hashes und isolierter lokaler Auth-Datei."""
+import asyncio
 import json
 from pathlib import Path
 import tempfile
@@ -12,7 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 import yaml
 
 from livescore.app import create_app
-from livescore.auth import AuthConfig, COOKIE, hash_password, verify_password
+from livescore.auth import AuthConfig, COOKIE, hash_password, update_password, verify_password
 from livescore.storage import load, save
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,19 +87,47 @@ class AuthTest(unittest.TestCase):
         self.client.cookies.clear()
         self.assertEqual(self.client.post('/api/v1/live/reset', json=payload).status_code, 401)
 
-    def test_first_start_creates_only_two_hashed_users(self):
+    def assert_locked_but_live(self):
+        """Fail closed nur für die Anmeldung; Live-API und Version bleiben (#18, #19)."""
+        self.assertEqual(self.client.get('/api/v1/live').status_code,200)
+        self.assertEqual(self.client.get('/api/version').status_code,200)
+        self.assertEqual(self.client.get('/static/i18n.js').status_code,200)
+        self.assertTrue(self.client.get('/api/auth/session').json()['locked'])
+        self.login(password='admin',status=503)
+        page=self.client.get('/',follow_redirects=False)
+        self.assertEqual(page.status_code,503); self.assertIn('sudo livescore --reset-admin-password',page.text)
+        self.assertEqual(self.client.get('/api/v1/tournament').json()['detail'],'auth_locked')
+        self.assertEqual(self.client.post('/api/v1/live/start',json={}).status_code,503)
+
+    def test_missing_file_creates_no_accounts_and_locks_only_login(self):
         self.client.__exit__(None,None,None)
         del self.client
         self.auth_path.unlink()
-        self.restart()
-        data = yaml.safe_load(self.auth_path.read_text())
-        self.assertEqual(set(data['users']),{'admin','operator'})
-        for name, user in data['users'].items():
-            self.assertTrue(user['default_password'])
-            self.assertTrue(verify_password(name,user['password_hash']))
-            self.assertNotEqual(user['password_hash'],name)
-            self.assertNotIn('password',user)
-        self.assertEqual(self.auth_path.stat().st_mode & 0o777,0o600)
+        with self.assertLogs(level='ERROR') as logs:
+            self.restart()
+        self.assertIn('auth.yml fehlt',' '.join(logs.output))
+        self.assertFalse(self.auth_path.exists())
+        self.assert_locked_but_live()
+        # Reset legt die Datei an; der Reload hebt die Sperre ohne Neustart auf.
+        update_password(self.auth_path,'admin',hash_password(NEW_PASSWORD),create=True)
+        self.assertTrue(asyncio.run(self.app.state.auth.reload()))
+        self.login(password=NEW_PASSWORD)
+        users=self.client.get('/api/auth/users').json()['users']
+        self.assertEqual([(u['username'],u['configured']) for u in users],[('admin',True),('operator',False)])
+        self.change('operator')
+        self.login('operator',password=NEW_PASSWORD)
+
+    def test_broken_file_starts_service_without_rewriting_or_leaking_hash(self):
+        self.client.__exit__(None,None,None)
+        del self.client
+        secret=self.initial['users']['admin']['password_hash']
+        for content in ('','broken: [\n  '+secret,yaml.safe_dump({'users':{'admin':dict(role='admin',password_hash='scrypt$1$'+secret[-20:])}})):
+            self.auth_path.write_text(content)
+            with self.assertLogs(level='ERROR') as logs:
+                self.restart()
+            self.assertNotIn(secret[-20:],' '.join(logs.output))
+            self.assertEqual(self.auth_path.read_text(),content)
+            self.assert_locked_but_live()
 
     def test_all_initial_logins_and_cookie_flags(self):
         for name in ('admin','operator'):
@@ -279,18 +308,25 @@ class AuthTest(unittest.TestCase):
         self.assertEqual(self.client.get('/api/v1/live').json(),expected)
         self.assertEqual(expected['status'],'live')
 
-    def test_existing_file_reduction_preserves_supported_accounts(self):
+    def test_unknown_entries_are_kept_until_a_write_backs_them_up(self):
         self.client.__exit__(None,None,None);del self.client
         original=yaml.safe_load(self.auth_path.read_text())
         extended=json.loads(json.dumps(original))
         extended['users']['obsolete-account']=dict(role='obsolete',password_hash='discarded',default_password=True)
         extended['obsolete_setting']='discarded'
         self.auth_path.write_text(yaml.safe_dump(extended))
-        self.restart()
-        self.assertEqual(yaml.safe_load(self.auth_path.read_text()),original)
+        before=self.auth_path.read_bytes()
+        with self.assertLogs(level='WARNING') as logs:
+            self.restart()
+        self.assertIn('users.obsolete-account',' '.join(logs.output))
+        self.assertEqual(self.auth_path.read_bytes(),before)  # Start schreibt nie neu
         self.assertEqual(set(self.app.state.auth.credentials.users),{'admin','operator'})
         self.login('obsolete-account',status=401)
         self.login('admin');self.change();self.login('admin',NEW_PASSWORD)
+        backups=list(self.root.glob('auth.yml.defekt-*'))
+        self.assertEqual(len(backups),1)
+        self.assertEqual(backups[0].read_bytes(),before)
+        self.assertNotIn('obsolete',self.auth_path.read_text())
         before=self.auth_path.read_bytes()
         self.restart()
         self.assertEqual(self.auth_path.read_bytes(),before)

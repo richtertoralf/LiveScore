@@ -308,8 +308,11 @@ class Deployment:
             else:
                 self.create_config()
             info = self.inspect(target)
-            if upgrade and info['auth_enabled'] and not Path(info['auth_file']).is_file():
-                fail('Auth-Datei fehlt; Upgrade setzt keine Passwörter auf Initialwerte zurück.')
+            if info['auth_enabled'] and info.get('auth_state', '').startswith('gesperrt') and (
+                    upgrade or Path(info['auth_file']).exists()):
+                # Kein Abbruch: nur die Anmeldung ist gesperrt, Live-API und Anzeigen laufen.
+                print(f"Hinweis: Anmeldung {info['auth_state']}. Einrichten: sudo livescore --reset-admin-password",
+                      flush=True)
             if not self.staging and start and not was_active:
                 # Refuse to start over an unrelated listener; never stop its process.
                 with socket.socket(socket.AF_INET6 if ':' in info['bind_host'] else socket.AF_INET) as sock:
@@ -317,6 +320,10 @@ class Deployment:
             if not upgrade:
                 run(target / '.venv/bin/python', '-m', 'livescore.bootstrap', '--config', self.config_file,
                     '--seed', target / 'imports/prague-2026.json', cwd=target)
+                if info['auth_enabled'] and not Path(info['auth_file']).exists():
+                    # Je eigenes Zufallspasswort statt bekannter Startpasswörter (#18).
+                    run(target / '.venv/bin/python', '-m', 'livescore.auth', 'create-accounts',
+                        '--file', info['auth_file'], cwd=target)
             # Download/build/validation happen while the old service is still running.
             if was_active:
                 self.systemctl('stop', UNIT)
@@ -393,7 +400,7 @@ class Deployment:
         print(f'LiveScore {version(target)} installiert. Web: http://HOST:{info["port"]}/')
         print(f'CLI: {self.cli}\nConfig/Auth: {self.config}\nDaten: {self.state / "data"}')
         print('Staging: keine Systemdienste/Konten verändert; Server nicht gestartet.' if self.staging
-              else 'Dienst: systemctl status livescore. Startpasswörter vor Internetfreigabe ändern.')
+              else 'Dienst: systemctl status livescore.')
 
     def uninstall(self, purge=False):
         if not any((p / MARKER).exists() for p in (self.prefix, self.config, self.state)):

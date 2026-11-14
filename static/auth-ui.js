@@ -11,6 +11,7 @@ if (login) login.onsubmit = async event => {
   } catch { message(t('Verbindung unterbrochen. Aktion möglicherweise gespeichert; aktuellen Stand prüfen, bevor erneut gebucht wird.')); }
   finally { button.disabled = false; login.password.value = ''; }
 };
+if (login && auth.locked) message(t('auth_locked'));
 const users = document.querySelector('#users-list');
 if (users && auth.authenticated && auth.role === 'admin') {
   const form = document.querySelector('#password-form');
@@ -22,6 +23,7 @@ if (users && auth.authenticated && auth.role === 'admin') {
     const name = document.createElement('h2'); name.textContent = user.username;
     const role = document.createElement('p'); role.textContent = t(user.role);
     article.append(name,role);
+    if (!user.configured) { const warn = document.createElement('p'); warn.className = 'security-warning'; warn.textContent = t('Nicht eingerichtet'); article.append(warn); }
     if (user.default_password) { const warn = document.createElement('p'); warn.className = 'security-warning'; warn.textContent = t('Standardpasswort aktiv'); article.append(warn); }
     const button = document.createElement('button'); button.textContent = t('Passwort ändern'); button.dataset.user = user.username;
     button.disabled = auth.must_change_password && user.username !== 'admin';

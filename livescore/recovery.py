@@ -68,8 +68,9 @@ def reload_running_service(config_path):
 
 def reset_admin_password(config_path, config):
     try:
-        # Recovery requires an existing, completely valid file; never seed accounts.
-        load_credentials(config.auth.file)
+        # Eine fehlende Datei legt der Reset an (nur admin); eine vorhandene muss lesbar sein.
+        if config.auth.file.exists():
+            load_credentials(config.auth.file)
         with warnings.catch_warnings():
             warnings.simplefilter('error', getpass.GetPassWarning)
             password = getpass.getpass('New admin password: ')
@@ -80,12 +81,14 @@ def reset_admin_password(config_path, config):
         if password != repeated:
             print('Passwords do not match.', file=sys.stderr)
             return 1
-        update_password(config.auth.file, 'admin', hash_password(password))
+        _, _, notes = update_password(config.auth.file, 'admin', hash_password(password), create=True)
     except (OSError, ValueError, RuntimeError, yaml.YAMLError):
         print('Admin password not changed: existing auth file invalid, inaccessible or locked.', file=sys.stderr)
         return 1
     except (EOFError, KeyboardInterrupt, getpass.GetPassWarning):
         print('Admin password not changed. Use an interactive terminal with hidden input.', file=sys.stderr)
         return 1
-    print('Admin password updated.')
+    for note in notes:
+        print(note)
+    print(f'Admin password updated in {config.auth.file}.')
     return 0 if reload_running_service(config_path) else 1

@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import yaml
 
-from livescore.auth import (Auth, AuthConfig, PasswordChange, credentials_lock,
+from livescore.auth import (Auth, AuthConfig, PasswordChange, create_accounts, credentials_lock,
                             hash_password, load_credentials, update_password, verify_password)
 from livescore.config import load_config
 from livescore.recovery import reset_admin_password, reload_running_service
@@ -160,6 +160,35 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
             before=self.path.read_bytes()
             self.assertEqual(reset_admin_password(self.config_file,self.config),1)
             self.assertEqual(self.path.read_bytes(),before)
+
+    async def test_reset_creates_missing_file_with_admin_only(self):
+        self.path.unlink()
+        with patch('livescore.recovery.getpass.getpass',side_effect=[PASSWORD,PASSWORD]),patch('livescore.recovery.reload_running_service',return_value=True),contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(reset_admin_password(self.config_file,self.config),0)
+        self.assertIn('auth.yml angelegt',output.getvalue())
+        credentials=load_credentials(self.path)
+        self.assertEqual(set(credentials.users),{'admin'})
+        self.assertTrue(verify_password(PASSWORD,credentials.users['admin'].password_hash))
+        self.assertEqual(self.path.stat().st_mode & 0o777,0o600)
+        self.assertNotIn(PASSWORD,output.getvalue())
+
+    async def test_create_accounts_uses_individual_random_passwords_once(self):
+        self.path.unlink()
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(create_accounts(self.path),0)
+        shown=dict(line.strip().split(': ',1) for line in output.getvalue().splitlines() if line.startswith('  '))
+        self.assertEqual(set(shown),{'admin','operator'})
+        self.assertNotEqual(shown['admin'],shown['operator'])
+        credentials=load_credentials(self.path)
+        for name,password in shown.items():
+            self.assertGreaterEqual(len(password),16)
+            self.assertTrue(verify_password(password,credentials.users[name].password_hash))
+            self.assertFalse(credentials.users[name].default_password)
+        before=self.path.read_bytes()
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(create_accounts(self.path),0)
+        self.assertEqual(self.path.read_bytes(),before)
+        self.assertIn('unverändert',output.getvalue())
 
     async def test_no_service_does_not_start_anything_and_extra_cli_password_is_rejected(self):
         with patch('livescore.recovery.shutil.which',return_value='/bin/systemctl'),patch('livescore.recovery.subprocess.run',return_value=subprocess.CompletedProcess([],0,'LoadState=not-found\n','')) as run,contextlib.redirect_stdout(io.StringIO()) as output:

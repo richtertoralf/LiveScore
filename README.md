@@ -83,7 +83,7 @@ anlegen:
 
 Ohne Kontendatei läuft LiveScore, aber die Anmeldung ist gesperrt; die
 Live-Daten bleiben lesbar. Passwörter ändert der Admin unter `/users`
-(12 bis 1024 Zeichen). Für einen Zugang aus dem Internet zusätzlich HTTPS
+(Vorgabe 5 bis 1024 Zeichen, einstellbar in `livescore.yml`). Für einen Zugang aus dem Internet zusätzlich HTTPS
 einrichten.
 
 Passwörter liegen als Hashwerte in `/etc/livescore/auth.yml`; Wiederherstellung

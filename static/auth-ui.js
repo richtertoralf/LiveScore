@@ -15,6 +15,9 @@ if (login && auth.locked) message(t('auth_locked'));
 const users = document.querySelector('#users-list');
 if (users && auth.authenticated && auth.role === 'admin') {
   const form = document.querySelector('#password-form');
+  // Grenzen aus livescore.yml (#12); kurze Passwörter: Hinweis statt Sperre.
+  for (const input of [form.password, form.repeat]) { input.minLength = auth.password_min_length; input.maxLength = auth.password_max_length; }
+  document.querySelector('#password-rules').textContent = t('password_rules').replace('{min}', auth.password_min_length).replace('{max}', auth.password_max_length);
   const response = await fetch('/api/auth/users');
   const data = await response.json();
   if (!response.ok) message(errorText(data.detail));

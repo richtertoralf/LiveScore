@@ -18,7 +18,7 @@ from pathlib import Path
 import secrets
 import shutil
 import time
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import Field, SecretStr, field_validator, model_validator
@@ -28,6 +28,9 @@ from .storage import atomic_write, FileLease
 
 USERS = ('admin', 'operator')
 RESET_COMMAND = 'sudo livescore --reset-admin-password'
+# Vorgabe für neue Passwörter (#12); einstellbar unter auth in livescore.yml.
+PASSWORD_LENGTH = (5, 1024)
+PASSWORD_HINT_BELOW = 12
 COOKIE = 'livescore_session'
 LOGIN_COOKIE = 'livescore_login'
 # OWASP scrypt alternative: N=2^15, r=8, p=3 (32 MiB per running KDF).
@@ -61,6 +64,28 @@ class AuthConfig(Model):
     file: Path = Path('auth.yml')
     session_hours: int = Field(default=12, strict=True, ge=1, le=168)
     secure_cookie: bool = False
+    # Bewusst ohne Typprüfung: Ein ungültiger Wert stoppt nichts (password_limits).
+    password_min_length: Any = None
+    password_max_length: Any = None
+
+
+def password_limits(minimum=None, maximum=None, source='livescore.yml'):
+    """(min, max, Meldung): ungültige Werte ergeben die Vorgabe und eine Meldung."""
+    low, high = PASSWORD_LENGTH
+    values = (low if minimum is None else minimum, high if maximum is None else maximum)
+    if not all(type(value) is int for value in values):
+        reason = 'Werte müssen ganze Zahlen sein'
+    elif not 1 <= values[0] <= values[1] <= high:
+        reason = f'zulässig ist 1 ≤ Minimum ≤ Maximum ≤ {high}'
+    else:
+        return values[0], values[1], None
+    return low, high, f'Ungültige Längengrenzen in {source}: {reason}. Verwendet werden {low} bis {high}.'
+
+
+def new_password_error(password, minimum, maximum):
+    if not minimum <= len(password) <= maximum:
+        return f'Passwort nicht geändert: {minimum} bis {maximum} Zeichen verwenden.'
+    return None
 
 
 class User(Model):
@@ -86,15 +111,10 @@ class Credentials(Model):
         return self
 
 
-def parse_credentials(text):
-    """Gültige Konten und Namen nicht übernommener Einträge.
-
-    Meldungen nennen nur Namen, nie Werte: Pydantic-Fehler enthielten sonst
-    Teile von password_hash (#22).
-    """
-    raw = yaml.safe_load(text)
+def collect_users(raw):
+    """Gültige Konten und Namen nicht übernommener Einträge, ohne Werte (#22)."""
     if not isinstance(raw, dict) or not isinstance(raw.get('users'), dict):
-        raise ValueError('ohne users-Abschnitt')
+        return {}, ['users']
     users, ignored = {}, [str(key) for key in raw if key != 'users']
     for name, value in raw['users'].items():
         try:
@@ -107,6 +127,19 @@ def parse_credentials(text):
             ignored.append(f'users.{name}')
             continue
         users[name] = user
+    return users, ignored
+
+
+def parse_credentials(text):
+    """Gültige Konten und Namen nicht übernommener Einträge.
+
+    Meldungen nennen nur Namen, nie Werte: Pydantic-Fehler enthielten sonst
+    Teile von password_hash (#22).
+    """
+    raw = yaml.safe_load(text)
+    if not isinstance(raw, dict) or not isinstance(raw.get('users'), dict):
+        raise ValueError('ohne users-Abschnitt')
+    users, ignored = collect_users(raw)
     if not users:
         raise ValueError('ohne gültiges Konto')
     return Credentials(users=users), ignored
@@ -131,9 +164,10 @@ class Login(Model):
 
 
 class PasswordChange(Model):
+    # Längen prüft change_password mit den eingestellten Grenzen (#12).
     username: Literal['admin', 'operator']
-    password: SecretStr = Field(min_length=12, max_length=1024)
-    repeat: SecretStr = Field(min_length=12, max_length=1024)
+    password: SecretStr = Field(max_length=1024)
+    repeat: SecretStr = Field(max_length=1024)
 
 
 @contextmanager
@@ -189,17 +223,27 @@ def load_credentials(path):
     return load_credentials_report(path)[0]
 
 
-def update_password(path, username, encoded, expected_admin_hash=None, create=False):
+def update_password(path, username, encoded, expected_admin_hash=None, create=False, repair=False):
     """Read-modify-write on the latest disk state, never a stale RAM snapshot.
 
     Returns (credentials, accepted, notes). Nicht übernommene Einträge werden
     vorher gesichert und genannt; nichts verschwindet stillschweigend.
+    create: eine fehlende Datei anlegen. repair (nur Reset, #20): eine
+    unbrauchbare Datei sichern und ihre gültigen Konten übernehmen.
     """
     notes = []
     with credentials_lock(path):
         if create and not path.exists():
             users, ignored = {}, []
             notes.append(f'{path.name} angelegt.')
+        elif repair:
+            try:
+                raw = yaml.safe_load(path.read_text(encoding='utf-8'))
+            except (UnicodeDecodeError, yaml.YAMLError):
+                raw = None
+            users, ignored = collect_users(raw)
+            if raw is None:
+                ignored = ['gesamte Datei (leer oder kein gültiges YAML)']
         else:
             current, ignored = read_credentials(path)
             users = dict(current.users)
@@ -232,6 +276,9 @@ class Auth:
         self.attempts = deque()
         self.credentials = None
         self.locked_reason = None
+        self.limits = password_limits(config.password_min_length, config.password_max_length)
+        if self.limits[2]:
+            logging.error(self.limits[2])
         if config.enabled:
             self.dummy_hash = hash_password(secrets.token_urlsafe(32))
             try:
@@ -310,7 +357,8 @@ class Auth:
             return dict(enabled=True, authenticated=False, locked=self.locked)
         defaults = [name for name, user in self.credentials.users.items() if user.default_password] if session.username == 'admin' else []
         return dict(enabled=True, authenticated=True, username=session.username, role=session.username,
-                    csrf_token=session.csrf, must_change_password=self.restricted(session), defaults=defaults)
+                    csrf_token=session.csrf, must_change_password=self.restricted(session), defaults=defaults,
+                    password_min_length=self.limits[0], password_max_length=self.limits[1])
 
     async def login(self, username, password):
         if self.locked:
@@ -343,6 +391,8 @@ class Auth:
             password = command.password.get_secret_value()
             if password != command.repeat.get_secret_value():
                 return 'password_mismatch'
+            if new_password_error(password, *self.limits[:2]):
+                return 'password_length'
             if password in USERS:
                 return 'password_weak'
             encoded = await asyncio.to_thread(hash_password, password)
@@ -361,6 +411,7 @@ class Auth:
                 raise asyncio.CancelledError
             if not accepted:
                 return 'auth_required'
+        logging.getLogger('uvicorn.error').info('Passwort für %s gesetzt (Oberfläche, durch admin)', command.username)
         return None
 
 
@@ -390,10 +441,11 @@ def main():
         if not args.file:
             parser.error('create-accounts braucht --file.')
         raise SystemExit(create_accounts(args.file))
-    password = getpass.getpass('Password: ')
-    if len(password) < 12 or len(password) > 1024:
-        parser.error('Use 12–1024 characters.')
-    if password != getpass.getpass('Repeat password: '):
+    password = getpass.getpass('Password: ').strip()  # wie Anmeldung und Oberfläche (#21)
+    low, high = PASSWORD_LENGTH
+    if not low <= len(password) <= high:
+        parser.error(f'Use {low}–{high} characters.')
+    if password != getpass.getpass('Repeat password: ').strip():
         parser.error('Passwords do not match.')
     print(hash_password(password))
 

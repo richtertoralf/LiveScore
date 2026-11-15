@@ -146,31 +146,87 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_cli_getpass_confirmation_and_failure_leave_file_intact(self):
         before=self.path.read_bytes()
-        for values in ([PASSWORD,'does not match'],['short','short']):
+        for values in ([PASSWORD,'does not match'],['abcd','abcd']):
             with patch('livescore.recovery.getpass.getpass',side_effect=values),patch('livescore.recovery.reload_running_service') as reload:
-                self.assertEqual(reset_admin_password(self.config_file,self.config),1)
+                self.assertEqual(reset_admin_password(self.config_file),1)
                 reload.assert_not_called()
             self.assertEqual(self.path.read_bytes(),before)
         with patch('livescore.recovery.getpass.getpass',side_effect=[PASSWORD,PASSWORD]),patch('livescore.recovery.reload_running_service',return_value=True) as reload:
-            self.assertEqual(reset_admin_password(self.config_file,self.config),0)
+            self.assertEqual(reset_admin_password(self.config_file),0)
             reload.assert_called_once_with(self.config_file)
         self.assertTrue(verify_password(PASSWORD,load_credentials(self.path).users['admin'].password_hash))
         self.assertEqual(self.path.stat().st_mode & 0o777,0o600)
         with patch('livescore.recovery.getpass.getpass',side_effect=[PASSWORD,PASSWORD]),patch('livescore.auth.atomic_write',side_effect=OSError('disk full')):
             before=self.path.read_bytes()
-            self.assertEqual(reset_admin_password(self.config_file,self.config),1)
+            self.assertEqual(reset_admin_password(self.config_file),1)
             self.assertEqual(self.path.read_bytes(),before)
 
     async def test_reset_creates_missing_file_with_admin_only(self):
         self.path.unlink()
         with patch('livescore.recovery.getpass.getpass',side_effect=[PASSWORD,PASSWORD]),patch('livescore.recovery.reload_running_service',return_value=True),contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertEqual(reset_admin_password(self.config_file,self.config),0)
+            self.assertEqual(reset_admin_password(self.config_file),0)
         self.assertIn('auth.yml angelegt',output.getvalue())
         credentials=load_credentials(self.path)
         self.assertEqual(set(credentials.users),{'admin'})
         self.assertTrue(verify_password(PASSWORD,credentials.users['admin'].password_hash))
         self.assertEqual(self.path.stat().st_mode & 0o777,0o600)
         self.assertNotIn(PASSWORD,output.getvalue())
+
+    def reset(self, *values, username='admin'):
+        with patch('livescore.recovery.getpass.getpass',side_effect=list(values)),patch('livescore.recovery.reload_running_service',return_value=True),contextlib.redirect_stdout(io.StringIO()) as out,contextlib.redirect_stderr(io.StringIO()) as err:
+            code=reset_admin_password(self.config_file,username)
+        return code,out.getvalue(),err.getvalue()
+
+    async def test_reset_ignores_broken_or_extended_config_and_names_fallbacks(self):
+        """#20: Der Reset liest nur Kontendatei-Ort und Grenzen."""
+        self.config_file.write_text(self.config_file.read_text()+'  password_min_length: 8\nunknown_key: true\n')
+        code,_,err=self.reset('abcdefg','abcdefg')
+        self.assertEqual(code,1); self.assertIn('8 bis 1024',err)
+        self.assertEqual(self.reset('abcdefgh','abcdefgh')[0],0)
+        self.config_file.write_text('bind_host: [kaputt\n')
+        code,out,err=self.reset(PASSWORD,PASSWORD)
+        self.assertEqual(code,0)
+        self.assertIn(f'Verwendet werden {self.root.resolve()/"auth.yml"} und 5 bis 1024',err)
+        self.assertTrue(verify_password(PASSWORD,load_credentials(self.path).users['admin'].password_hash))
+        self.config_file.write_text('bind_host: 127.0.0.1\nauth:\n  password_min_length: 9\n  password_max_length: 8\n')
+        code,_,err=self.reset('abcde','abcde')
+        self.assertEqual(code,0); self.assertIn('Verwendet werden 5 bis 1024.',err)
+
+    async def test_reset_repairs_a_broken_auth_file_with_backup(self):
+        broken=yaml.safe_dump({'users':{'admin':dict(role='admin',password_hash='kaputt'),'operator':self.original['operator']}})
+        self.path.write_text(broken)
+        code,out,_=self.reset(PASSWORD,PASSWORD)
+        self.assertEqual(code,0)
+        backups=list(self.root.glob('auth.yml.defekt-*'))
+        self.assertEqual(len(backups),1); self.assertEqual(backups[0].read_text(),broken)
+        self.assertIn('Nicht übernommen: users.admin',out)
+        credentials=load_credentials(self.path)
+        self.assertEqual(credentials.users['operator'].model_dump(),self.original['operator'])
+        self.assertTrue(verify_password(PASSWORD,credentials.users['admin'].password_hash))
+        self.path.write_text('users: [kaputt')
+        code,out,_=self.reset(PASSWORD,PASSWORD)
+        self.assertEqual(code,0); self.assertIn('gesamte Datei',out)
+        self.assertEqual(set(load_credentials(self.path).users),{'admin'})
+        self.assertEqual(len(list(self.root.glob('auth.yml.defekt-*'))),2)
+
+    async def test_config_accepts_the_limit_keys(self):
+        self.config_file.write_text(self.config_file.read_text()+'  password_min_length: 8\n  password_max_length: 64\n')
+        auth=load_config(self.config_file).auth
+        self.assertEqual((auth.password_min_length,auth.password_max_length),(8,64))
+
+    async def test_reset_operator_and_reject_other_names(self):
+        code,out,_=self.reset(OPERATOR_PASSWORD,OPERATOR_PASSWORD,username='operator')
+        self.assertEqual(code,0); self.assertIn('Operator password updated',out)
+        self.assertTrue(verify_password(OPERATOR_PASSWORD,load_credentials(self.path).users['operator'].password_hash))
+        self.assertEqual(self.reset(username='root')[0],2)
+
+    async def test_reset_strips_edge_spaces_like_login_and_says_so(self):
+        """#21: Alle Wege behandeln Leerzeichen am Rand gleich; vorhandene Passwörter bleiben gültig."""
+        code,out,_=self.reset('  '+PASSWORD+' ',PASSWORD)
+        self.assertEqual(code,0); self.assertIn('Leerzeichen am Rand entfernt',out)
+        self.assertTrue(verify_password(PASSWORD,load_credentials(self.path).users['admin'].password_hash))
+        code,out,_=self.reset('kurz1','kurz1')
+        self.assertEqual(code,0); self.assertIn('Hinweis: Passwörter unter 12',out)
 
     async def test_create_accounts_uses_individual_random_passwords_once(self):
         self.path.unlink()

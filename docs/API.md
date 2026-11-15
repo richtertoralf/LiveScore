@@ -1283,7 +1283,9 @@ Ein Admin mit Startpasswort kann zunächst nur dessen Änderung durchführen.
 `GET /api/auth/users` liefert dem Admin beide festen Konten mit Rolle,
 `configured` (Konto eingerichtet) und `default_password` (Startpasswort aktiv).
 `POST /api/auth/password` erwartet `username`, `password`, `repeat` und den
-CSRF-Header. Bei eigener Änderung meldet `reauthenticate: true` den nötigen
+CSRF-Header. Liegt die Länge außerhalb der Grenzen (`password_min_length`,
+`password_max_length` in `GET /api/auth/session` für Admins), antwortet der
+Dienst mit 422 `password_length`. Bei eigener Änderung meldet `reauthenticate: true` den nötigen
 erneuten Login. [Passwörter und Betrieb](INSTALLATION.md#benutzer-und-passwörter).
 
 ## Sportprofilverwaltung (Admin)

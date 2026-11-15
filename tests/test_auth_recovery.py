@@ -51,8 +51,8 @@ class RecoveryTest(unittest.IsolatedAsyncioTestCase):
         self.assertIs(self.auth.session(self.operator),original_session)
         self.assertEqual(self.auth.credentials.users['operator'].model_dump(),operator)
         self.assertFalse(self.auth.credentials.users['admin'].default_password)
-        self.assertEqual((await self.auth.login('admin','admin'))[0],'invalid')
-        result,sid=await self.auth.login('admin',PASSWORD)
+        self.assertEqual((await self.auth.login('admin','admin','192.0.2.1'))[0],'invalid')
+        result,sid=await self.auth.login('admin',PASSWORD,'192.0.2.1')
         self.assertEqual(result,'ok')
         self.assertTrue(await self.auth.reload())
         self.assertIsNotNone(self.auth.session(sid)) # unchanged reload is not a logout

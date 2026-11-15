@@ -1273,7 +1273,10 @@ Bei aktiviertem Auth benötigen geschützte Endpunkte eine Cookie-Session:
 
 Ein mitgesendeter `Origin` muss zum `Host` passen. WebSockets verlangen eine
 gültige Session und einen passenden Origin. Fehlende Anmeldung ergibt 401,
-fehlende Rechte oder ungültiges CSRF-Token 403; Login-Limits ergeben 429.
+fehlende Rechte oder ungültiges CSRF-Token 403. Nach 10 Fehlversuchen eines
+Clients in 5 Minuten, oder 100 aller Clients zusammen, antwortet `POST /login`
+mit 429 (`login_limited`); erfolgreiche Anmeldungen zählen nicht, siehe
+[Anmeldelimit](INSTALLATION.md#benutzer-und-passwörter).
 Ist die Anmeldung mangels gültiger Kontendatei gesperrt, antworten alle nicht
 öffentlichen Pfade und `POST /login` mit 503 (`auth_locked`);
 `GET /api/v1/live` und `GET /api/version` bleiben erreichbar.

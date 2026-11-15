@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import getpass
 import hashlib
 import hmac
+import ipaddress
 import logging
 import os
 from pathlib import Path
@@ -21,7 +22,7 @@ import time
 from typing import Any, Literal
 
 import yaml
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, IPvAnyAddress, SecretStr, field_validator, model_validator
 
 from .models import Model
 from .storage import atomic_write, FileLease
@@ -31,6 +32,10 @@ RESET_COMMAND = 'sudo livescore --reset-admin-password'
 # Vorgabe für neue Passwörter (#12); einstellbar unter auth in livescore.yml.
 PASSWORD_LENGTH = (5, 1024)
 PASSWORD_HINT_BELOW = 12
+# Anmeldelimit (#23): nur Fehlversuche, je Client und insgesamt, im Zeitfenster.
+LOGIN_WINDOW_SECONDS = 300
+LOGIN_FAILURES_PER_CLIENT = 10
+LOGIN_FAILURES_TOTAL = 100
 COOKIE = 'livescore_session'
 LOGIN_COOKIE = 'livescore_login'
 # OWASP scrypt alternative: N=2^15, r=8, p=3 (32 MiB per running KDF).
@@ -67,6 +72,30 @@ class AuthConfig(Model):
     # Bewusst ohne Typprüfung: Ein ungültiger Wert stoppt nichts (password_limits).
     password_min_length: Any = None
     password_max_length: Any = None
+    # Nur von diesen Adressen wird X-Forwarded-For für das Anmeldelimit gelesen (#23).
+    trusted_proxies: list[IPvAnyAddress] = []
+
+
+def login_client(peer, forwarded_for, trusted_proxies):
+    """Client-Schlüssel für das Anmeldelimit (#23).
+
+    Die direkte Gegenstelle. Nur wenn sie ein eingetragener Proxy ist, gilt der
+    rechte Eintrag aus X-Forwarded-For, der selbst kein eingetragener Proxy ist;
+    weiter links stehende Einträge kann der Client selbst mitschicken.
+    """
+    def address(value):
+        try:
+            return ipaddress.ip_address(value.strip())
+        except ValueError:
+            return None
+
+    if address(peer) not in trusted_proxies:
+        return peer
+    for entry in reversed(forwarded_for.split(',')):
+        client = address(entry)
+        if client not in trusted_proxies:
+            return str(client) if client is not None else peer
+    return peer
 
 
 def password_limits(minimum=None, maximum=None, source='livescore.yml'):
@@ -273,7 +302,7 @@ class Auth:
         self.sessions = {}
         self.lock = asyncio.Lock()
         self.login_lock = asyncio.Lock()
-        self.attempts = deque()
+        self.failures = deque()  # (Zeitpunkt, Client) fehlgeschlagener Anmeldungen
         self.credentials = None
         self.locked_reason = None
         self.limits = password_limits(config.password_min_length, config.password_max_length)
@@ -360,16 +389,26 @@ class Auth:
                     csrf_token=session.csrf, must_change_password=self.restricted(session), defaults=defaults,
                     password_min_length=self.limits[0], password_max_length=self.limits[1])
 
-    async def login(self, username, password):
+    def login_limited(self, client):
+        """Ein Client mit vielen Fehlversuchen sperrt nur sich selbst (#23).
+
+        Das höhere Gesamtlimit begrenzt verteiltes Durchprobieren. Höchstens
+        LOGIN_FAILURES_TOTAL Einträge, weil gesperrte Anfragen nichts eintragen.
+        """
+        cutoff = time.monotonic() - LOGIN_WINDOW_SECONDS
+        while self.failures and self.failures[0][0] < cutoff:
+            self.failures.popleft()
+        return (len(self.failures) >= LOGIN_FAILURES_TOTAL
+                or sum(entry == client for _, entry in self.failures) >= LOGIN_FAILURES_PER_CLIENT)
+
+    async def login(self, username, password, client):
         if self.locked:
             return 'locked', None
-        # Global limit works even behind a proxy without trusting forwarded client IPs.
-        now = time.monotonic()
-        while self.attempts and self.attempts[0] < now-300:
-            self.attempts.popleft()
-        if len(self.attempts) >= 30:
+        if self.login_limited(client):
             return 'limited', None
-        self.attempts.append(now)
+        # Vorab als Fehlversuch zählen: Parallele oder abgebrochene Anfragen umgehen das Limit nicht.
+        attempt = (time.monotonic(), client)
+        self.failures.append(attempt)
         async with self.login_lock:
             user = self.credentials.users.get(username)
             encoded = user.password_hash if user else self.dummy_hash
@@ -378,6 +417,9 @@ class Auth:
             current = self.credentials.users.get(username)
             if not good or not user or current is None or current.password_hash != encoded:
                 return 'invalid', None
+            # Erfolg zählt nicht und löscht den Zähler dieses Clients; das Gesamtlimit zählt weiter.
+            self.failures = deque((at, None if entry == client else entry)
+                                  for at, entry in self.failures if (at, entry) != attempt)
             return 'ok', self.new_session(username)
 
     async def change_password(self, session, command):

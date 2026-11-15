@@ -9,11 +9,13 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from starlette.websockets import WebSocketDisconnect
 import yaml
 
 from livescore.app import create_app
-from livescore.auth import AuthConfig, COOKIE, hash_password, update_password, verify_password
+from livescore.auth import AuthConfig, COOKIE, hash_password, login_client, update_password, verify_password
+from livescore.config import load_config
 from livescore.storage import load, save
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,9 +38,9 @@ class AuthTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.addCleanup(lambda:self.client.__exit__(None,None,None))
 
-    def restart(self):
+    def restart(self, **auth):
         if hasattr(self,'client'): self.client.__exit__(None,None,None)
-        self.app = create_app(data_dir=self.root/'data',auth_config=AuthConfig(file=self.auth_path))
+        self.app = create_app(data_dir=self.root/'data',auth_config=AuthConfig(file=self.auth_path,**auth))
         self.client = TestClient(self.app).__enter__()
 
     def login(self, name='admin', password=None, client=None, status=200):
@@ -368,10 +370,89 @@ class AuthTest(unittest.TestCase):
         https=TestClient(self.app,base_url='https://testserver')
         response=self.login('operator',client=https)
         self.assertIn('Secure',response.headers['set-cookie'])
-        self.app.state.auth.attempts.extend([time.monotonic()]*30)
+        self.app.state.auth.failures.extend([(time.monotonic(),'testclient')]*10)
         https.cookies.clear()
-        self.login('operator',client=https,status=429)
+        self.assertEqual(self.login('operator',client=https,status=429).json(),{'detail':'login_limited'})
         https.close()
+
+    def peer(self, address, **headers):
+        """Eigener Client mit fester Gegenstelle, ohne Lifespan wie die übrigen Zweitclients."""
+        client = TestClient(self.app,client=(address,50000),headers=headers)
+        self.addCleanup(client.close)
+        return client
+
+    def fail(self, client, times):
+        """Fehlversuche ohne je eine KDF-Prüfung (0,2 s) vormerken."""
+        self.app.state.auth.failures.extend([(time.monotonic(),client)]*times)
+
+    def test_failed_logins_lock_out_only_their_client(self):
+        """#23: Fehlversuche eines Clients sperren nicht die übrigen Bediener."""
+        attacker, operator = self.peer('192.0.2.10'), self.peer('192.0.2.20')
+        self.fail('192.0.2.10',9)
+        self.login(password='wrong secret',client=attacker,status=401)
+        self.assertEqual(self.login('operator',client=attacker,status=429).json(),{'detail':'login_limited'})
+        self.login('operator',password='wrong secret',client=operator,status=401)
+        self.login('operator',client=operator)
+        self.assertEqual(operator.get('/api/v1/tournament').status_code,200)
+        self.login('operator',client=attacker,status=429)
+
+    def test_successful_logins_are_not_counted_and_clear_client_failures(self):
+        auth = self.app.state.auth
+        operator, other = self.peer('192.0.2.20'), self.peer('192.0.2.30')
+        self.login('operator',client=operator); self.login('operator',client=operator)
+        self.assertEqual(list(auth.failures),[])
+        self.fail('192.0.2.20',9); self.fail('192.0.2.30',3)
+        self.login('operator',client=operator)
+        # Nur die eigenen Fehlversuche sind gelöscht; das Gesamtlimit zählt sie weiter.
+        self.assertEqual(sum(entry=='192.0.2.20' for _,entry in auth.failures),0)
+        self.assertEqual(sum(entry=='192.0.2.30' for _,entry in auth.failures),3)
+        self.assertEqual(len(auth.failures),12)
+        self.fail('192.0.2.20',9)
+        self.login('operator',client=operator)
+        self.login('operator',client=other)
+
+    def test_global_failure_cap_and_window(self):
+        auth = self.app.state.auth
+        late = self.peer('192.0.2.99')
+        for host in range(1,21):
+            self.fail(f'198.51.100.{host}',5)
+        self.login('operator',client=late,status=429)
+        # Gleiche Anzahl außerhalb des Fensters: Die Anmeldung geht wieder.
+        auth.failures.clear()
+        auth.failures.extend([(time.monotonic()-301,f'198.51.100.{host}') for host in range(1,101)])
+        self.login('operator',client=late)
+        self.assertEqual(list(auth.failures),[])
+        # 99 Fehlversuche anderer und ein eigener erreichen das Gesamtlimit.
+        for host in range(1,34):
+            self.fail(f'198.51.100.{host}',3)
+        self.login(password='wrong secret',client=late,status=401)
+        self.login('operator',client=self.peer('192.0.2.98'),status=429)
+
+    def test_trusted_proxy_forwarded_for_identifies_client(self):
+        self.restart(trusted_proxies=['127.0.0.1'])
+        auth = self.app.state.auth
+        attacker = self.peer('127.0.0.1',**{'X-Forwarded-For':'192.0.2.10'})
+        # Der Client darf links beliebige Einträge mitschicken; maßgeblich ist der vom Proxy angehängte.
+        operator = self.peer('127.0.0.1',**{'X-Forwarded-For':'192.0.2.10, 192.0.2.20'})
+        self.login(password='wrong secret',client=attacker,status=401)
+        self.assertEqual([entry for _,entry in auth.failures],['192.0.2.10'])
+        self.fail('192.0.2.10',9)
+        self.login('operator',client=attacker,status=429)
+        self.login('operator',client=operator)
+        self.login('operator',client=self.peer('127.0.0.1'))  # ohne Header: der Proxy selbst
+
+    def test_forwarded_for_from_untrusted_peer_is_ignored(self):
+        for trusted in ([],['127.0.0.1']):
+            with self.subTest(trusted=trusted):
+                self.restart(trusted_proxies=trusted)
+                auth = self.app.state.auth
+                spoofing = self.peer('192.0.2.10',**{'X-Forwarded-For':'192.0.2.77'})
+                self.login(password='wrong secret',client=spoofing,status=401)
+                self.assertEqual([entry for _,entry in auth.failures],['192.0.2.10'])
+                self.fail('192.0.2.10',9)
+                for forwarded in ('192.0.2.78','127.0.0.1','192.0.2.78, 192.0.2.79'):
+                    other = self.peer('192.0.2.10',**{'X-Forwarded-For':forwarded})
+                    self.login('operator',client=other,status=429)
 
     def test_failed_password_save_preserves_sessions_and_hash(self):
         self.admin(); old=self.auth_path.read_bytes()
@@ -379,6 +460,40 @@ class AuthTest(unittest.TestCase):
             self.change('operator',status=503)
         self.assertEqual(self.auth_path.read_bytes(),old)
         self.assertTrue(self.app.state.auth.credentials.users['operator'].default_password)
+
+
+class LoginClientTest(unittest.TestCase):
+    """#23: X-Forwarded-For nur von eingetragenen Proxys, rechter Eintrag zuerst."""
+
+    def test_client_from_peer_and_trusted_forwarded_for(self):
+        trusted = AuthConfig(trusted_proxies=['127.0.0.1','10.0.0.2','::1']).trusted_proxies
+        for peer,forwarded,proxies,expected in (
+                ('192.0.2.10','192.0.2.77',[],'192.0.2.10'),
+                ('127.0.0.1','192.0.2.77',[],'127.0.0.1'),
+                ('192.0.2.10','192.0.2.77',trusted,'192.0.2.10'),
+                ('127.0.0.1','192.0.2.77',trusted,'192.0.2.77'),
+                ('127.0.0.1','spoofed, 192.0.2.66, 192.0.2.77',trusted,'192.0.2.77'),
+                ('127.0.0.1','192.0.2.66, 192.0.2.77, 10.0.0.2',trusted,'192.0.2.77'),
+                ('::1','2001:DB8::1',trusted,'2001:db8::1'),
+                ('127.0.0.1','',trusted,'127.0.0.1'),
+                ('127.0.0.1','10.0.0.2, 127.0.0.1',trusted,'127.0.0.1'),
+                ('127.0.0.1','192.0.2.66, unknown',trusted,'127.0.0.1'),
+                ('','192.0.2.77',trusted,'')):
+            with self.subTest(peer=peer,forwarded=forwarded,proxies=bool(proxies)):
+                self.assertEqual(login_client(peer,forwarded,proxies),expected)
+
+    def test_trusted_proxies_config_validation(self):
+        self.assertEqual(AuthConfig().trusted_proxies,[])
+        for invalid in (['10.0.0.0/8'],['proxy.local'],['127.0.0.1:8080'],'127.0.0.1'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                AuthConfig(trusted_proxies=invalid)
+        with tempfile.TemporaryDirectory(dir=ROOT/'.test-artifacts') as temp:
+            path = Path(temp)/'livescore.yml'
+            base = 'bind_host: 127.0.0.1\nport: 8730\ndata_dir: data\nauth:\n  trusted_proxies: '
+            path.write_text(base+'[127.0.0.1, "::1"]\n')
+            self.assertEqual([str(item) for item in load_config(path).auth.trusted_proxies],['127.0.0.1','::1'])
+            path.write_text(base+'[192.0.2.300]\n')
+            with self.assertRaises(ValidationError): load_config(path)
 
 
 if __name__ == '__main__': unittest.main()

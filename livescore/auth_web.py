@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from fastapi import Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 
-from .auth import COOKIE, LOGIN_COOKIE, RESET_COMMAND, USERS, Login, PasswordChange
+from .auth import COOKIE, LOGIN_COOKIE, RESET_COMMAND, USERS, Login, PasswordChange, login_client
 
 
 def error(code, status):
@@ -89,7 +89,9 @@ def install_auth(app, root):
         cookie = request.cookies.get(LOGIN_COOKIE, '')
         if not csrf or not cookie or not hmac.compare_digest(csrf.encode(), cookie.encode()) or (request.headers.get('origin') and not same_origin(request)):
             return error('csrf_invalid', 403)
-        outcome, sid = await auth.login(command.username, command.password.get_secret_value())
+        client = login_client(request.client.host if request.client else '',
+                              ','.join(request.headers.getlist('x-forwarded-for')), auth.config.trusted_proxies)
+        outcome, sid = await auth.login(command.username, command.password.get_secret_value(), client)
         if outcome == 'locked':
             return error('auth_locked', 503)
         if outcome != 'ok':

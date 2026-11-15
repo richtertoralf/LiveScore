@@ -10,3 +10,6 @@ auth:
   # Länge neuer Passwörter (Zeichen); vorhandene bleiben gültig.
   password_min_length: 5
   password_max_length: 1024
+  # IP-Adressen eigener Reverse Proxys; nur von dort zählt X-Forwarded-For
+  # für das Anmeldelimit. Leer: Header werden ignoriert.
+  trusted_proxies: []

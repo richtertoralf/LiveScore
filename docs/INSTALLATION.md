@@ -185,6 +185,7 @@ auth:
 | `auth.session_hours` | Session-Laufzeit ab Anmeldung | ganze Zahl 1–168 | `12` |
 | `auth.secure_cookie` | Cookies nur über HTTPS senden | `true` bei HTTPS, `false` für lokalen HTTP-Zugriff | `false` |
 | `auth.password_min_length`, `auth.password_max_length` | Länge neuer Passwörter in Zeichen (Oberfläche, Reset); vorhandene bleiben gültig | 1 ≤ Minimum ≤ Maximum ≤ 1024; ungültig: Vorgabe mit Meldung im Log und beim Reset, kein Startabbruch | `5`, `1024` |
+| `auth.trusted_proxies` | Reverse Proxys, deren `X-Forwarded-For` das Anmeldelimit auswertet, siehe [HTTPS](#https) | Liste von IP-Adressen, keine Netze oder Namen | `[]` |
 
 Genau eine der Optionen `data_dir` oder `data_file` angeben. Unbekannte
 Schlüssel oder ungültige Werte führen zum Startabbruch.
@@ -305,6 +306,20 @@ Bei einem Proxy auf demselben Rechner kann LiveScore an `127.0.0.1` gebunden wer
 Der Proxy muss den öffentlichen `Host` erhalten und WebSocket-Upgrades weiterleiten,
 damit Browser-Origin und Host übereinstimmen. Uvicorn vertraut keinen
 Forwarded-Headers; die Cookie-Sicherheit wird ausdrücklich konfiguriert.
+
+Das [Anmeldelimit](#benutzer-und-passwörter) zählt je Client-Adresse. Hinter
+einem Proxy sieht LiveScore nur dessen Adresse; alle Clients teilen sich dann
+ein Limit. Abhilfe:
+
+- Adresse des Proxys eintragen, zum Beispiel `trusted_proxies: [127.0.0.1]`
+  unter `auth`.
+- Der Proxy hängt die Adresse seiner Gegenstelle an `X-Forwarded-For` an
+  (nginx: `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`).
+- Nur bei Anfragen von eingetragenen Proxys gilt der rechte Eintrag, der
+  selbst kein eingetragener Proxy ist. Weiter links stehende Einträge kann der
+  Client selbst setzen; sie bleiben unbeachtet.
+- Anfragen anderer Absender: Header wird ignoriert.
+
 Bei getrennten Maschinen auch die Verbindung zum Backend absichern.
 TLS, Zertifikate und Firewall richtet der Betreiber ein.
 
@@ -344,6 +359,15 @@ schreibt die Datei beim Start nie neu.
   `auth.yml.defekt-<Zeitstempel>` und nennt die nicht übernommenen Einträge.
 - **Reload im Betrieb:** Fehlt dabei ein bisher gültiges Konto oder ist die
   Datei unbrauchbar, bleibt der bisherige Stand samt Sessions aktiv.
+
+Anmeldelimit (feste Werte, Zeitfenster 5 Minuten):
+
+- Je Client höchstens 10 fehlgeschlagene Anmeldungen, danach HTTP 429
+  („Zu viele Anmeldeversuche“). Andere Clients melden sich weiter an.
+- Erfolgreiche Anmeldungen zählen nicht und setzen den Zähler des Clients zurück.
+- Ab 100 Fehlversuchen aller Clients zusammen ist jede Anmeldung gesperrt.
+- Laufende Sessions bleiben angemeldet; ein Neustart setzt das Limit zurück.
+- Hinter einem Reverse Proxy `auth.trusted_proxies` setzen, siehe [HTTPS](#https).
 
 Die Live-Daten unter `GET /api/v1/live` bleiben öffentlich lesbar.
 Die übrigen fachlichen APIs und der WebSocket verlangen bei aktiviertem Auth

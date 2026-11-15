@@ -184,14 +184,15 @@ auth:
 | `auth.file` | Passwortdatei | Pfad; der Linux-Installer verlangt einen Ort innerhalb `/etc/livescore` | `auth.yml` |
 | `auth.session_hours` | Session-Laufzeit ab Anmeldung | ganze Zahl 1–168 | `12` |
 | `auth.secure_cookie` | Cookies nur über HTTPS senden | `true` bei HTTPS, `false` für lokalen HTTP-Zugriff | `false` |
+| `auth.password_min_length`, `auth.password_max_length` | Länge neuer Passwörter in Zeichen (Oberfläche, Reset); vorhandene bleiben gültig | 1 ≤ Minimum ≤ Maximum ≤ 1024; ungültig: Vorgabe mit Meldung im Log und beim Reset, kein Startabbruch | `5`, `1024` |
 
 Genau eine der Optionen `data_dir` oder `data_file` angeben. Unbekannte
 Schlüssel oder ungültige Werte führen zum Startabbruch.
 [Migration und Dateiformat](DATA_MODEL.md#dateien-und-migration).
 
-Nicht einstellbar: die Passwortlänge (12 bis 1024 Zeichen, fest im Programm;
-zentral konfigurierbar ist geplant, #12) und die beiden festen Konten `admin`
-und `operator`.
+Nicht einstellbar: die beiden festen Konten `admin` und `operator`.
+Neue Schlüssel wie `auth.password_min_length` erst nach dem Upgrade auf eine
+Version eintragen, die sie kennt; ältere Versionen lehnen sie ab.
 
 ### 4. Prioritäten
 
@@ -319,7 +320,9 @@ zeigt sie einmal an. Es gibt kein festes Startpasswort. Installationen älterer
 Versionen behalten ihre Passwörter; ein noch aktives Startpasswort
 (`admin`/`admin`, `operator`/`operator`) bleibt gültig, bis es geändert wird.
 Log und `/users` weisen darauf hin; ein Admin mit Startpasswort wird wie bisher
-zuerst zu `/users` geführt. Neue Passwörter müssen 12–1024 Zeichen
+zuerst zu `/users` geführt. Neue Passwörter müssen innerhalb der Grenzen
+liegen (Vorgabe 5–1024 Zeichen, siehe `auth.password_min_length`); unter
+12 Zeichen gibt es einen Hinweis, keine Sperre. Sie müssen
 lang sein und werden zweimal eingegeben. Das alte Passwort ist nicht erforderlich.
 Operatoren ändern ihr Passwort über den Admin. Weitere Benutzer oder Rollen
 können nicht angelegt werden.
@@ -364,12 +367,24 @@ mit Anzeigevorgaben und nullable Werten berücksichtigen.
 Auf dem Linux-Dienstrechner:
 
 ```sh
-sudo livescore --reset-admin-password
+sudo livescore --reset-admin-password            # admin
+sudo livescore --reset-admin-password operator   # operator
 ```
 
 Das neue Passwort wird zweimal verdeckt abgefragt. Die CLI speichert es atomar
-in der vorhandenen gültigen Auth-Datei und fordert beim passenden laufenden
-systemd-Dienst einen Auth-Reload an. Der Reload lädt nur Passwörter neu;
+und fordert beim passenden laufenden systemd-Dienst einen Auth-Reload an.
+
+- **Unabhängig von `livescore.yml`:** Der Reset liest daraus nur `auth.file`
+  und die Längengrenzen. Ist die Datei defekt oder um unbekannte Schlüssel
+  ergänzt, nennt er die verwendeten Ersatzwerte und arbeitet weiter.
+- **Defekte `auth.yml`:** Der Reset sichert sie vorher als
+  `auth.yml.defekt-<Zeitstempel>` (gleiche Rechte), übernimmt gültige Konten
+  und nennt nicht übernommene Einträge. Eine fehlende Datei legt er an.
+- **Leerzeichen am Rand** entfernt der Reset wie Anmeldung und Oberfläche und
+  sagt es.
+- **Rückgabe:** 0 gesetzt, 1 nicht gesetzt, 2 ungültiger Benutzer. Jede
+  Änderung steht ohne Geheimnisse im Syslog (`livescore`, Facility `auth`);
+  Änderungen über `/users` im Dienstlog. Der Reload lädt nur Passwörter neu;
 Operator-Sessions, WebSockets und Live-Daten bleiben erhalten.
 Das Dienstlog bestätigt den asynchronen Reload:
 
@@ -390,8 +405,8 @@ Ungültige neue Auth-Daten werden beim Reload abgewiesen; bisherige Credentials
 bleiben im Speicher aktiv. Bei älteren Prozessen ohne SIGHUP-Unterstützung oder
 einem fehlgeschlagenen Reload kann das Passwort bereits gespeichert sein,
 obwohl die CLI einen Fehler meldet. Erst Dienstlog und Prozessstand prüfen;
-nicht blind erneut zurücksetzen. Beide Passwörter vergessen: zuerst Admin per CLI,
-anschließend Operator unter `/users` neu setzen.
+nicht blind erneut zurücksetzen. Beide Passwörter vergessen: beide per CLI
+oder zuerst Admin per CLI, anschließend Operator unter `/users` neu setzen.
 
 ## Upgrade
 

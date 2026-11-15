@@ -10,7 +10,8 @@ import warnings
 
 import yaml
 
-from .auth import hash_password, load_credentials, update_password
+from .auth import (PASSWORD_HINT_BELOW, PASSWORD_LENGTH, USERS, hash_password, new_password_error,
+                   password_limits, update_password)
 
 UNIT = 'livescore.service'
 
@@ -66,29 +67,81 @@ def reload_running_service(config_path):
         return False
 
 
-def reset_admin_password(config_path, config):
+def recovery_settings(config_path):
+    """Nur Ort der Kontendatei und Längengrenzen, unabhängig von der übrigen Konfiguration (#20).
+
+    Returns (auth_file, minimum, maximum, notes). Eine defekte oder ergänzte
+    livescore.yml blockiert den Reset nicht; verwendete Ersatzwerte werden genannt.
+    """
+    config_path = Path(config_path).resolve()
+    default_file = config_path.parent / 'auth.yml'
+    notes = []
     try:
-        # Eine fehlende Datei legt der Reset an (nur admin); eine vorhandene muss lesbar sein.
-        if config.auth.file.exists():
-            load_credentials(config.auth.file)
+        raw = yaml.safe_load(config_path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        raw = None
+        notes.append(f'{config_path} nicht lesbar oder kein gültiges YAML. '
+                     f'Verwendet werden {default_file} und {PASSWORD_LENGTH[0]} bis {PASSWORD_LENGTH[1]} Zeichen.')
+    auth = raw.get('auth') if isinstance(raw, dict) else None
+    auth = auth if isinstance(auth, dict) else {}
+    configured = auth.get('file', 'auth.yml')
+    if isinstance(configured, str) and configured.strip():
+        auth_file = (config_path.parent / configured).resolve()
+    else:
+        auth_file = default_file
+        notes.append(f'auth.file in {config_path} ungültig. Verwendet wird {default_file}.')
+    minimum, maximum, error = password_limits(auth.get('password_min_length'), auth.get('password_max_length'),
+                                              str(config_path))
+    if error and raw is not None:
+        notes.append(error)
+    return auth_file, minimum, maximum, notes
+
+
+def reset_admin_password(config_path, username='admin'):
+    if username not in USERS:
+        print('Nur die Konten admin oder operator. Passwörter ausschließlich interaktiv eingeben.', file=sys.stderr)
+        return 2
+    auth_file, minimum, maximum, settings_notes = recovery_settings(config_path)
+    for note in settings_notes:
+        print(note, file=sys.stderr)
+    try:
         with warnings.catch_warnings():
             warnings.simplefilter('error', getpass.GetPassWarning)
-            password = getpass.getpass('New admin password: ')
-            repeated = getpass.getpass('Repeat new admin password: ')
-        if not 12 <= len(password) <= 1024:
-            print('Use 12–1024 characters.', file=sys.stderr)
-            return 1
-        if password != repeated:
+            entered = getpass.getpass(f'New {username} password: ')
+            repeated = getpass.getpass(f'Repeat new {username} password: ')
+        # Wie Anmeldung und Oberfläche: Leerzeichen am Rand zählen nicht (#21).
+        password = entered.strip()
+        if password != repeated.strip():
             print('Passwords do not match.', file=sys.stderr)
             return 1
-        _, _, notes = update_password(config.auth.file, 'admin', hash_password(password), create=True)
+        error = new_password_error(password, minimum, maximum)
+        if error:
+            print(error, file=sys.stderr)
+            return 1
+        _, _, notes = update_password(auth_file, username, hash_password(password), create=True, repair=True)
     except (OSError, ValueError, RuntimeError, yaml.YAMLError):
-        print('Admin password not changed: existing auth file invalid, inaccessible or locked.', file=sys.stderr)
+        print(f'{username} password not changed: auth file inaccessible or locked.', file=sys.stderr)
         return 1
     except (EOFError, KeyboardInterrupt, getpass.GetPassWarning):
-        print('Admin password not changed. Use an interactive terminal with hidden input.', file=sys.stderr)
+        print(f'{username} password not changed. Use an interactive terminal with hidden input.', file=sys.stderr)
         return 1
+    _syslog(f'Passwort für {username} gesetzt (--reset-admin-password)')
+    if password != entered:
+        notes.append('Leerzeichen am Rand entfernt, wie bei der Anmeldung.')
     for note in notes:
         print(note)
-    print(f'Admin password updated in {config.auth.file}.')
+    if len(password) < PASSWORD_HINT_BELOW:
+        print(f'Hinweis: Passwörter unter {PASSWORD_HINT_BELOW} Zeichen sind im Netz leichter zu erraten.')
+    print(f'{"Admin" if username == "admin" else "Operator"} password updated in {auth_file}.')
     return 0 if reload_running_service(config_path) else 1
+
+
+def _syslog(message):
+    """Protokoll ohne Geheimnisse (Facility auth)."""
+    try:
+        import syslog
+        syslog.openlog('livescore', syslog.LOG_PID, syslog.LOG_AUTH)
+        syslog.syslog(syslog.LOG_NOTICE, message)
+        syslog.closelog()
+    except (ImportError, OSError):
+        pass

@@ -196,7 +196,7 @@ class AuthTest(unittest.TestCase):
 
     def test_password_mismatch_and_invalid_input_dont_change_file(self):
         self.admin(); before=self.auth_path.read_bytes()
-        for password,repeat in [('short','short'),(NEW_PASSWORD,'different password'),('admin','admin')]:
+        for password,repeat in [('abcd','abcd'),(NEW_PASSWORD,'different password'),('admin','admin')]:
             response=self.client.post('/api/auth/password',json=dict(username='operator',password=password,repeat=repeat),headers=self.headers())
             self.assertEqual(response.status_code,422)
         self.assertEqual(self.auth_path.read_bytes(),before)
@@ -307,6 +307,24 @@ class AuthTest(unittest.TestCase):
         self.client.cookies.clear()
         self.assertEqual(self.client.get('/api/v1/live').json(),expected)
         self.assertEqual(expected['status'],'live')
+
+    def test_configured_limits_apply_to_the_web_change(self):
+        """#12: Grenzen aus livescore.yml; ungültige Werte: Vorgabe mit Meldung, Dienst läuft."""
+        self.admin()
+        self.app.state.auth.limits=(8,10,None)
+        self.assertEqual(self.client.get('/api/auth/session').json()['password_max_length'],10)
+        for password,status in (('1234567',422),('12345678',200),('1234567890',200),('12345678901',422)):
+            with self.subTest(password=password):
+                response=self.client.post('/api/auth/password',json=dict(username='operator',password=password,repeat=password),headers=self.headers())
+                self.assertEqual(response.status_code,status,response.text)
+                if status==422: self.assertEqual(response.json()['detail'],'password_length')
+        self.client.__exit__(None,None,None);del self.client
+        with self.assertLogs(level='ERROR') as logs:
+            self.app=create_app(data_dir=self.root/'data',auth_config=AuthConfig(file=self.auth_path,password_min_length=9,password_max_length=8))
+            self.client=TestClient(self.app).__enter__()
+        self.assertIn('Verwendet werden 5 bis 1024.',' '.join(logs.output))
+        self.assertEqual(self.app.state.auth.limits[:2],(5,1024))
+        self.assertEqual(self.client.get('/api/v1/live').status_code,200)
 
     def test_unknown_entries_are_kept_until_a_write_backs_them_up(self):
         self.client.__exit__(None,None,None);del self.client
